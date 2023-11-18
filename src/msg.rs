@@ -3,7 +3,9 @@
 //! This module defines the messages the ICA controller contract receives.
 
 use cosmwasm_schema::{cw_serde, QueryResponses};
-use cw_ica_controller::types::msg::options::ChannelOpenInitOptions;
+use cw_ica_controller::types::{
+    callbacks::IcaControllerCallbackMsg, msg::options::ChannelOpenInitOptions,
+};
 
 /// This is the instantiation message for the contract.
 #[cw_serde]
@@ -23,7 +25,11 @@ pub struct InstantiateMsg {
 /// This is the execution message for the contract.
 #[cw_ownable::cw_ownable_execute]
 #[cw_serde]
-pub enum ExecuteMsg {}
+pub enum ExecuteMsg {
+    /// ReceiveIcaCallback is the message sent by the ICA controller contract
+    /// on packet and channel lifecycle events.
+    ReceiveIcaCallback(IcaControllerCallbackMsg),
+}
 
 /// This is the query message for the contract.
 #[cw_ownable::cw_ownable_query]
