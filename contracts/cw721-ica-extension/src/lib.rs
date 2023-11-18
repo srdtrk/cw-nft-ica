@@ -1,39 +1,51 @@
+#![doc = include_str!("../README.md")]
+#![deny(missing_docs)]
+
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::Empty;
+use cosmwasm_std::{CustomMsg, Empty};
 pub use cw721_base::{ContractError, InstantiateMsg, MinterResponse};
 
 // Version info for migration
-const CONTRACT_NAME: &str = "crates.io:cw721-metadata-onchain";
+const CONTRACT_NAME: &str = "crates.io:cw721-ica-extension";
 const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-#[cw_serde]
-pub struct Trait {
-    pub display_type: Option<String>,
-    pub trait_type: String,
-    pub value: String,
-}
-
-// see: https://docs.opensea.io/docs/metadata-standards
+/// This is the ICA extension data that is stored with each token
 #[cw_serde]
 #[derive(Default)]
-pub struct Metadata {
-    pub image: Option<String>,
-    pub image_data: Option<String>,
-    pub external_url: Option<String>,
-    pub description: Option<String>,
-    pub name: Option<String>,
-    pub attributes: Option<Vec<Trait>>,
-    pub background_color: Option<String>,
-    pub animation_url: Option<String>,
-    pub youtube_url: Option<String>,
+pub struct Extension {
+    /// The ICA controller contract's address
+    ica_controller_address: String,
+    /// The ICA address in the counterparty chain. This will be populated
+    /// by the minter contract once the ICA channel is established.
+    ica_address: Option<String>,
 }
 
-pub type Extension = Option<Metadata>;
-
-pub type Cw721MetadataContract<'a> = cw721_base::Cw721Contract<'a, Extension, Empty, Empty, Empty>;
-pub type ExecuteMsg = cw721_base::ExecuteMsg<Extension, Empty>;
+/// This is a wrapper around the [`cw721_base::Cw721Contract`] that adds the ICA extension
+pub type Cw721IcaExtensionContract<'a> =
+    cw721_base::Cw721Contract<'a, Extension, Empty, custom_msg::UpdateIcaAddressMsg, Empty>;
+/// This is the execute message that this contract supports
+pub type ExecuteMsg = cw721_base::ExecuteMsg<Extension, custom_msg::UpdateIcaAddressMsg>;
+/// This is the query message that this contract supports
 pub type QueryMsg = cw721_base::QueryMsg<Empty>;
 
+/// This module contains the custom messages that this contract supports
+pub mod custom_msg {
+    use super::*;
+
+    /// This is the custom message that is used to update the ICA address
+    /// after the ICA channel is established.
+    #[cw_serde]
+    pub struct UpdateIcaAddressMsg {
+        /// The token ID of the token to update
+        pub token_id: String,
+        /// The ICA address in the counterparty chain
+        pub ica_address: String,
+    }
+
+    impl CustomMsg for UpdateIcaAddressMsg {}
+}
+
+/// This module contains the entry points for the contract
 #[cfg(not(feature = "library"))]
 pub mod entry {
     use super::*;
@@ -42,6 +54,7 @@ pub mod entry {
     use cosmwasm_std::{Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 
     // This makes a conscious choice on the various generics used by the contract
+    /// This is the instantiate entry point for the contract
     #[entry_point]
     pub fn instantiate(
         mut deps: DepsMut,
@@ -51,9 +64,10 @@ pub mod entry {
     ) -> StdResult<Response> {
         cw2::set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
 
-        Cw721MetadataContract::default().instantiate(deps.branch(), env, info, msg)
+        Cw721IcaExtensionContract::default().instantiate(deps.branch(), env, info, msg)
     }
 
+    /// This is the execute entry point for the contract
     #[entry_point]
     pub fn execute(
         deps: DepsMut,
@@ -61,12 +75,31 @@ pub mod entry {
         info: MessageInfo,
         msg: ExecuteMsg,
     ) -> Result<Response, ContractError> {
-        Cw721MetadataContract::default().execute(deps, env, info, msg)
+        match msg {
+            ExecuteMsg::Extension { msg } => {
+                cw_ownable::assert_owner(deps.storage, &info.sender)?;
+
+                let mut token = Cw721IcaExtensionContract::default()
+                    .tokens
+                    .load(deps.storage, &msg.token_id)?;
+                token.extension.ica_address = Some(msg.ica_address);
+
+                Cw721IcaExtensionContract::default().tokens.save(
+                    deps.storage,
+                    &msg.token_id,
+                    &token,
+                )?;
+
+                Ok(Response::default())
+            }
+            _ => Cw721IcaExtensionContract::default().execute(deps, env, info, msg),
+        }
     }
 
+    /// This is the query entry point for the contract
     #[entry_point]
     pub fn query(deps: Deps, env: Env, msg: QueryMsg) -> StdResult<Binary> {
-        Cw721MetadataContract::default().query(deps, env, msg)
+        Cw721IcaExtensionContract::default().query(deps, env, msg)
     }
 }
 
@@ -74,7 +107,10 @@ pub mod entry {
 mod tests {
     use super::*;
 
-    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
+    use cosmwasm_std::{
+        testing::{mock_dependencies, mock_env, mock_info},
+        Addr,
+    };
     use cw721::Cw721Query;
 
     const CREATOR: &str = "creator";
@@ -100,12 +136,14 @@ mod tests {
         let version = cw2::get_contract_version(deps.as_ref().storage).unwrap();
         assert_eq!(version.contract, CONTRACT_NAME);
         assert_ne!(version.contract, cw721_base::CONTRACT_NAME);
+
+        assert!(cw_ownable::is_owner(&deps.storage, &Addr::unchecked("larry")).unwrap())
     }
 
     #[test]
     fn use_metadata_extension() {
         let mut deps = mock_dependencies();
-        let contract = Cw721MetadataContract::default();
+        let contract = Cw721IcaExtensionContract::default();
 
         let info = mock_info(CREATOR, &[]);
         let init_msg = InstantiateMsg {
@@ -119,11 +157,10 @@ mod tests {
 
         let token_id = "Enterprise";
         let token_uri = Some("https://starships.example.com/Starship/Enterprise.json".into());
-        let extension = Some(Metadata {
-            description: Some("Spaceship with Warp Drive".into()),
-            name: Some("Starship USS Enterprise".to_string()),
-            ..Metadata::default()
-        });
+        let extension = Extension {
+            ica_controller_address: "0x1234567890123456789012345678901234567890".into(),
+            ica_address: None,
+        };
         let exec_msg = ExecuteMsg::Mint {
             token_id: token_id.to_string(),
             owner: "john".to_string(),
