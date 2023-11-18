@@ -1,4 +1,5 @@
 use cosmwasm_std::StdError;
+use cw_ownable::OwnershipError;
 use thiserror::Error;
 
 /// ContractError is the error type returned by contract's functions.
@@ -7,6 +8,9 @@ use thiserror::Error;
 pub enum ContractError {
     #[error("{0}")]
     Std(#[from] StdError),
+
+    #[error("{0}")]
+    OwnershipError(#[from] OwnershipError),
 
     #[error("Unauthorized")]
     Unauthorized {},

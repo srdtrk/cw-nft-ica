@@ -17,14 +17,16 @@ pub struct InstantiateMsg {
     /// The code ID of the Cw721 ICA extension contract.
     pub cw721_ica_extension_code_id: u64,
     /// The default channel open init options for interchain accounts.
-    pub default_chan_init_options: ChannelOpenInitOptions
+    pub default_chan_init_options: ChannelOpenInitOptions,
 }
 
 /// This is the execution message for the contract.
+#[cw_ownable::cw_ownable_execute]
 #[cw_serde]
 pub enum ExecuteMsg {}
 
 /// This is the query message for the contract.
+#[cw_ownable::cw_ownable_query]
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {}
