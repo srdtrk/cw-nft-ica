@@ -1,4 +1,4 @@
-use cosmwasm_std::StdError;
+use cosmwasm_std::{StdError, Instantiate2AddressError};
 use cw_ownable::OwnershipError;
 use thiserror::Error;
 
@@ -11,6 +11,9 @@ pub enum ContractError {
 
     #[error("{0}")]
     OwnershipError(#[from] OwnershipError),
+
+    #[error("error when computing the instantiate2 address: {0}")]
+    Instantiate2AddressError(#[from] Instantiate2AddressError),
 
     #[error("Unauthorized")]
     Unauthorized {},

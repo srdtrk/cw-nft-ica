@@ -20,6 +20,10 @@ pub struct InstantiateMsg {
     pub cw721_ica_extension_code_id: u64,
     /// The default channel open init options for interchain accounts.
     pub default_chan_init_options: ChannelOpenInitOptions,
+    /// The optional salt used to generate the cw721 ICA extension
+    /// contract address.
+    #[serde(default)]
+    pub salt: Option<String>,
 }
 
 /// This is the execution message for the contract.

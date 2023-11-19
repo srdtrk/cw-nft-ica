@@ -25,3 +25,4 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 cw-ica-controller = { workspace = true }
 cw-ownable = { workspace = true }
+cw721-base = { workspace = true }

@@ -26,9 +26,10 @@ pub fn instantiate(
 
     let (cosmos_msg, contract_addr) = instantiate::instantiate2_cw721_ica_extension(
         deps.api,
+        deps.querier,
         env,
-        info,
         msg.cw721_ica_extension_code_id,
+        msg.salt,
     )?;
 
     let state = ContractState {
@@ -66,17 +67,43 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 }
 
 mod instantiate {
-    use cosmwasm_std::{Addr, Api, CosmosMsg};
-
     use super::*;
 
+    use cosmwasm_std::{Addr, Api, CosmosMsg, QuerierWrapper, instantiate2_address, WasmMsg};
+
     pub fn instantiate2_cw721_ica_extension(
-        _api: &dyn Api,
-        _env: Env,
-        _info: MessageInfo,
-        _code_id: u64,
+        api: &dyn Api,
+        querier: QuerierWrapper,
+        env: Env,
+        code_id: u64,
+        salt: Option<String>,
     ) -> Result<(CosmosMsg, Addr), ContractError> {
-        todo!()
+        let salt = salt.unwrap_or(env.block.time.seconds().to_string());
+
+        let code_info = querier
+            .query_wasm_code_info(code_id)?;
+        let creator_cannonical = api.addr_canonicalize(env.contract.address.as_str())?;
+
+        let contract_addr = api.addr_humanize(&instantiate2_address(
+            &code_info.checksum,
+            &creator_cannonical,
+            salt.as_bytes(),
+        )?)?;
+
+        let instantiate_msg = WasmMsg::Instantiate2 {
+            code_id,
+            msg: to_json_binary(&cw721_base::InstantiateMsg {
+                name: "NFT-ICA".to_string(),
+                symbol: "ICA".to_string(),
+                minter: env.contract.address.to_string(),
+            })?,
+            funds: vec![],
+            label: format!("cw721-ica-{}", env.block.height),
+            admin: Some(env.contract.address.to_string()),
+            salt: salt.as_bytes().into(),
+        };
+
+        return Ok((instantiate_msg.into(), contract_addr));
     }
 }
 
