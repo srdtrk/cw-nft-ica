@@ -3,9 +3,9 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 
-use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::state::{ContractState, STATE};
+use crate::types::ContractError;
+use crate::types::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
+use crate::types::state::{ContractState, STATE};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:nft-ica";

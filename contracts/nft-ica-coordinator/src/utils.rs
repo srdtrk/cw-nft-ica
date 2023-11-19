@@ -4,7 +4,7 @@ use cosmwasm_std::{
     instantiate2_address, Addr, Api, Binary, CosmosMsg, Env, QuerierWrapper, WasmMsg,
 };
 
-use crate::ContractError;
+use crate::types::ContractError;
 
 /// Instantiate a contract using the instantiate2 pattern.
 /// Returns the instantiate2 message and the contract address.
