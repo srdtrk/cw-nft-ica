@@ -39,3 +39,83 @@ pub fn instantiate2_contract(
 
     return Ok((instantiate_msg.into(), contract_addr));
 }
+
+/// Contains the storage utilities.
+pub mod storage {
+    use cosmwasm_std::{Storage, StdResult};
+    use cw_storage_plus::Map;
+
+    /// The bi-directional map between ICA addresses and NFT IDs.
+    pub struct NftIcaBiMap<'a, 'b>(Map<'a, &'b str, String>);
+
+    impl<'a, 'b> NftIcaBiMap<'a, 'b> {
+        /// Create a new bi-directional map between ICA addresses and NFT IDs.
+        pub const fn new(namespace: &'a str) -> Self {
+            Self(Map::new(namespace))
+        }
+
+        /// Insert a new ICA address and NFT ID pair.
+        pub fn insert(&self, store: &mut dyn Storage, ica_addr: impl Into<String>, nft_id: impl Into<String>) -> StdResult<()> {
+            let ica_addr = ica_addr.into();
+            let nft_id = nft_id.into();
+
+            self.0.save(store, &ica_addr, &nft_id)?;
+            self.0.save(store, &nft_id, &ica_addr)?;
+
+            Ok(())
+        }
+
+        /// Get the value associated with the given key.
+        pub fn load(&self, store: &dyn Storage, key: &str) -> StdResult<String> {
+            self.0.load(store, key)
+        }
+
+        /// Remove the value associated with the given key and vice versa.
+        /// Does not return an error if the key does not exist.
+        /// Returns an error if there are issues parsing the value associated with the given key.
+        pub fn remove(&self, store: &mut dyn Storage, key: &str) -> StdResult<()> {
+            self.0.may_load(store, key)?.map(|value| {
+                self.0.remove(store, key);
+                self.0.remove(store, &value);
+            });
+
+            Ok(())
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        use cosmwasm_std::testing::MockStorage;
+
+        #[test]
+        fn test_nft_ica_bi_map() {
+            let mut storage = MockStorage::new();
+
+            let nft_ica_bi_map = NftIcaBiMap::new("nft_ica_bi_map");
+
+            nft_ica_bi_map.insert(&mut storage, "ica-addr-1", "nft-id-1").unwrap();
+            nft_ica_bi_map.insert(&mut storage, "ica-addr-2", "nft-id-2").unwrap();
+
+            assert_eq!(nft_ica_bi_map.load(&storage, "ica-addr-1").unwrap(), "nft-id-1");
+            assert_eq!(nft_ica_bi_map.load(&storage, "nft-id-1").unwrap(), "ica-addr-1");
+            assert_eq!(nft_ica_bi_map.load(&storage, "ica-addr-2").unwrap(), "nft-id-2");
+            assert_eq!(nft_ica_bi_map.load(&storage, "nft-id-2").unwrap(), "ica-addr-2");
+
+            nft_ica_bi_map.remove(&mut storage, "ica-addr-1").unwrap();
+
+            assert!(nft_ica_bi_map.load(&storage, "ica-addr-1").is_err());
+            assert!(nft_ica_bi_map.load(&storage, "nft-id-1").is_err());
+            assert_eq!(nft_ica_bi_map.load(&storage, "ica-addr-2").unwrap(), "nft-id-2");
+            assert_eq!(nft_ica_bi_map.load(&storage, "nft-id-2").unwrap(), "ica-addr-2");
+
+            nft_ica_bi_map.remove(&mut storage, "nft-id-2").unwrap();
+
+            assert!(nft_ica_bi_map.load(&storage, "ica-addr-1").is_err());
+            assert!(nft_ica_bi_map.load(&storage, "nft-id-1").is_err());
+            assert!(nft_ica_bi_map.load(&storage, "ica-addr-2").is_err());
+            assert!(nft_ica_bi_map.load(&storage, "nft-id-2").is_err());
+        }
+    }
+}
