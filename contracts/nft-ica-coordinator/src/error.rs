@@ -1,4 +1,4 @@
-use cosmwasm_std::{StdError, Instantiate2AddressError};
+use cosmwasm_std::{Instantiate2AddressError, StdError};
 use cw_ownable::OwnershipError;
 use thiserror::Error;
 

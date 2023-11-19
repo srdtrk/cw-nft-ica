@@ -67,10 +67,14 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
 }
 
 mod instantiate {
+    use crate::utils;
+
     use super::*;
 
-    use cosmwasm_std::{Addr, Api, CosmosMsg, QuerierWrapper, instantiate2_address, WasmMsg};
+    use cosmwasm_std::{Addr, Api, CosmosMsg, QuerierWrapper};
 
+    /// Instantiate the cw721-ica extension contract using the instantiate2 pattern.
+    /// Returns the instantiate2 message and the contract address.
     pub fn instantiate2_cw721_ica_extension(
         api: &dyn Api,
         querier: QuerierWrapper,
@@ -78,38 +82,27 @@ mod instantiate {
         code_id: u64,
         salt: Option<String>,
     ) -> Result<(CosmosMsg, Addr), ContractError> {
-        let salt = salt.unwrap_or(env.block.time.seconds().to_string());
+        let instantiate_msg = to_json_binary(&cw721_base::InstantiateMsg {
+            name: "NFT-ICA".to_string(),
+            symbol: "ICA".to_string(),
+            minter: env.contract.address.to_string(),
+        })?;
 
-        let code_info = querier
-            .query_wasm_code_info(code_id)?;
-        let creator_cannonical = api.addr_canonicalize(env.contract.address.as_str())?;
+        let label = format!("cw721-ica-{}", env.block.height);
 
-        let contract_addr = api.addr_humanize(&instantiate2_address(
-            &code_info.checksum,
-            &creator_cannonical,
-            salt.as_bytes(),
-        )?)?;
-
-        let instantiate_msg = WasmMsg::Instantiate2 {
-            code_id,
-            msg: to_json_binary(&cw721_base::InstantiateMsg {
-                name: "NFT-ICA".to_string(),
-                symbol: "ICA".to_string(),
-                minter: env.contract.address.to_string(),
-            })?,
-            funds: vec![],
-            label: format!("cw721-ica-{}", env.block.height),
-            admin: Some(env.contract.address.to_string()),
-            salt: salt.as_bytes().into(),
-        };
-
-        return Ok((instantiate_msg.into(), contract_addr));
+        utils::instantiate2_contract(api, querier, env, code_id, salt, label, instantiate_msg)
     }
 }
 
 mod execute {
     use super::*;
 
+    use cosmwasm_std::{Addr, Api, CosmosMsg, QuerierWrapper};
+    use cw_ica_controller::types::msg::options::ChannelOpenInitOptions;
+
+    use crate::utils;
+
+    /// Update the ownership of the contract.
     pub fn update_ownership(
         deps: DepsMut,
         env: Env,
@@ -118,6 +111,27 @@ mod execute {
     ) -> Result<Response, ContractError> {
         cw_ownable::update_ownership(deps, &env.block, &info.sender, action)?;
         Ok(Response::default())
+    }
+
+    /// Instantiate the cw721-ica extension contract using the instantiate2 pattern.
+    /// Returns the instantiate2 message and the contract address.
+    fn instantiate2_cw_ica_controller(
+        api: &dyn Api,
+        querier: QuerierWrapper,
+        env: Env,
+        code_id: u64,
+        salt: Option<String>,
+        channel_open_init_options: Option<ChannelOpenInitOptions>,
+    ) -> Result<(CosmosMsg, Addr), ContractError> {
+        let instantiate_msg = to_json_binary(&cw_ica_controller::types::msg::InstantiateMsg {
+            admin: Some(env.contract.address.to_string()),
+            channel_open_init_options,
+            send_callbacks_to: Some(env.contract.address.to_string()),
+        })?;
+
+        let label = format!("cw-ica-controller-{}", env.block.height);
+
+        utils::instantiate2_contract(api, querier, env, code_id, salt, label, instantiate_msg)
     }
 }
 
