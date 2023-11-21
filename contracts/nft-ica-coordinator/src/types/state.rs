@@ -19,6 +19,8 @@ pub const REGISTERED_ICA_ADDRS: KeySet<&Addr> = KeySet::new("registered_ica");
 pub const NFT_ICA_BI_MAP: NftIcaBiMap = NftIcaBiMap::new("nft_ica_bi_map");
 /// NFT_MINT_QUEUE is the queue of NFT mint requests, waiting for a callback from the ICA controller contract.
 pub const NFT_MINT_QUEUE: Deque<mint::QueueItem> = Deque::new("nft_mint_queue");
+/// The item used to store the NFT-ICA counter.
+pub const TOKEN_COUNTER: Item<u64> = Item::new("ica_nft_counter");
 
 mod contract {
     use super::*;

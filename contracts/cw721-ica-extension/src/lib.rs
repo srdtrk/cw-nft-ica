@@ -2,7 +2,7 @@
 #![deny(missing_docs)]
 
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{Empty, Addr};
+use cosmwasm_std::{Addr, Empty};
 pub use cw721_base::{ContractError, InstantiateMsg, MinterResponse};
 
 // Version info for migration

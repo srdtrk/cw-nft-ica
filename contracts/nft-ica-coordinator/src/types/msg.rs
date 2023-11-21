@@ -30,9 +30,14 @@ pub struct InstantiateMsg {
 #[cw_ownable::cw_ownable_execute]
 #[cw_serde]
 pub enum ExecuteMsg {
-    /// MintIca creates a new ICA.
+    /// MintIca creates a new ICA for the caller.
     /// The NFT is minted after a callback from the ICA controller contract.
-    MintIca {},
+    MintIca {
+        /// The optional salt used to generate the cw721 ICA extension
+        /// contract address.
+        #[serde(default)]
+        salt: Option<String>,
+    },
     /// ReceiveIcaCallback is the message sent by the ICA controller contract
     /// on packet and channel lifecycle events.
     ReceiveIcaCallback(IcaControllerCallbackMsg),

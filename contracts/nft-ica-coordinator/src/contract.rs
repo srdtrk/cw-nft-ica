@@ -3,13 +3,10 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 
+use crate::types::keys;
 use crate::types::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
 use crate::types::state::{ContractState, STATE};
 use crate::types::ContractError;
-
-// version info for migration info
-const CONTRACT_NAME: &str = "crates.io:nft-ica";
-const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Instantiate the contract.
 #[entry_point]
@@ -19,7 +16,7 @@ pub fn instantiate(
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
-    cw2::set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+    cw2::set_contract_version(deps.storage, keys::CONTRACT_NAME, keys::CONTRACT_VERSION)?;
 
     let owner = msg.owner.unwrap_or(info.sender.to_string());
     cw_ownable::initialize_owner(deps.storage, deps.api, Some(&owner))?;
@@ -56,7 +53,7 @@ pub fn execute(
         ExecuteMsg::ReceiveIcaCallback(callback) => {
             execute::receive_ica_callback(deps, info, callback)
         }
-        _ => unimplemented!(),
+        ExecuteMsg::MintIca { salt } => execute::mint_ica(deps, env, info, salt),
     }
 }
 
@@ -107,7 +104,9 @@ mod execute {
     };
 
     use crate::{
-        types::state::{NFT_MINT_QUEUE, REGISTERED_ICA_ADDRS},
+        types::state::{
+            QueueItem, NFT_ICA_BI_MAP, NFT_MINT_QUEUE, REGISTERED_ICA_ADDRS, TOKEN_COUNTER,
+        },
         utils,
     };
 
@@ -120,6 +119,37 @@ mod execute {
     ) -> Result<Response, ContractError> {
         cw_ownable::update_ownership(deps, &env.block, &info.sender, action)?;
         Ok(Response::default())
+    }
+
+    /// Mint a new ICA for the caller.
+    pub fn mint_ica(
+        deps: DepsMut,
+        env: Env,
+        info: MessageInfo,
+        salt: Option<String>,
+    ) -> Result<Response, ContractError> {
+        let state = STATE.load(deps.storage)?;
+        let ica_count = TOKEN_COUNTER.may_load(deps.storage)?.unwrap_or_default();
+
+        let queue_item = QueueItem {
+            token_id: format!("{}-{}", keys::TOKEN_PREFIX, ica_count),
+            owner: info.sender.to_string(),
+        };
+
+        NFT_MINT_QUEUE.push_front(deps.storage, &queue_item)?;
+
+        let (cosmos_msg, contract_addr) = instantiate2_cw_ica_controller(
+            deps.api,
+            deps.querier,
+            env,
+            state.ica_controller_code_id,
+            salt,
+            Some(state.default_chan_init_options),
+        )?;
+
+        REGISTERED_ICA_ADDRS.insert(deps.storage, &contract_addr)?;
+
+        Ok(Response::new().add_message(cosmos_msg))
     }
 
     pub fn receive_ica_callback(
@@ -139,6 +169,8 @@ mod execute {
 
                 let cw721_ica_extension_address =
                     STATE.load(deps.storage)?.cw721_ica_extension_address;
+
+                NFT_ICA_BI_MAP.insert(deps.storage, &ica_address, &queue_item.token_id)?;
 
                 let msg = cw721_ica_extension::ExecuteMsg::Mint {
                     token_id: queue_item.token_id,
