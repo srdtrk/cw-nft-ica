@@ -66,6 +66,26 @@ pub mod entry {
     }
 }
 
+/// This module contains the helper functions for other contracts to use.
+pub mod helpers {
+    use std::marker::PhantomData;
+
+    use cw721_base::helpers::Cw721Contract;
+
+    use super::*;
+
+    /// This types wraps the address of the ICA extension contract to provide
+    /// a convenient interface for other contracts to use.
+    pub type Cw721IcaExtensionContract = Cw721Contract<Empty, Empty>;
+
+    /// Creates a new instance of the ICA extension contract helper
+    pub fn new_cw721_ica_extension_helper(
+        ica_extension_address: Addr,
+    ) -> Cw721IcaExtensionContract {
+        Cw721Contract(ica_extension_address, PhantomData, PhantomData)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

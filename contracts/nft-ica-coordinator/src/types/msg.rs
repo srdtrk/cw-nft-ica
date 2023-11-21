@@ -4,7 +4,8 @@
 
 use cosmwasm_schema::{cw_serde, QueryResponses};
 use cw_ica_controller::types::{
-    callbacks::IcaControllerCallbackMsg, msg::options::ChannelOpenInitOptions,
+    callbacks::IcaControllerCallbackMsg,
+    msg::{options::ChannelOpenInitOptions, ExecuteMsg as IcaControllerExecuteMsg},
 };
 
 /// This is the instantiation message for the contract.
@@ -41,6 +42,14 @@ pub enum ExecuteMsg {
     /// ReceiveIcaCallback is the message sent by the ICA controller contract
     /// on packet and channel lifecycle events.
     ReceiveIcaCallback(IcaControllerCallbackMsg),
+    /// ExecuteIcaMsg allows the owner of the ICA NFT to send a custom message.
+    /// This is directly forwarded to the ICA controller contract after authorization.
+    ExecuteIcaMsg {
+        /// The token ID of the ICA NFT.
+        token_id: String,
+        /// The custom message to send to the ICA controller contract.
+        msg: IcaControllerExecuteMsg,
+    },
 }
 
 /// This is the query message for the contract.

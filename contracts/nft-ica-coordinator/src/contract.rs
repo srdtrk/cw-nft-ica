@@ -54,6 +54,7 @@ pub fn execute(
             execute::receive_ica_callback(deps, info, callback)
         }
         ExecuteMsg::MintIca { salt } => execute::mint_ica(deps, env, info, salt),
+        ExecuteMsg::ExecuteIcaMsg { token_id, msg } => execute::ica_msg(deps, info, token_id, msg),
     }
 }
 
@@ -98,9 +99,13 @@ mod execute {
     use super::*;
 
     use cosmwasm_std::{Addr, Api, CosmosMsg, QuerierWrapper, WasmMsg};
-    use cw721_ica_extension::Extension;
-    use cw_ica_controller::types::{
-        callbacks::IcaControllerCallbackMsg, msg::options::ChannelOpenInitOptions,
+    use cw721_ica_extension::{helpers::new_cw721_ica_extension_helper, Extension};
+    use cw_ica_controller::{
+        helpers::CwIcaControllerContract,
+        types::{
+            callbacks::IcaControllerCallbackMsg,
+            msg::{options::ChannelOpenInitOptions, ExecuteMsg as IcaControllerExecuteMsg},
+        },
     };
 
     use crate::{
@@ -193,6 +198,37 @@ mod execute {
             }
             _ => Ok(Response::new()),
         }
+    }
+
+    /// Execute a message on the ICA contract if the sender is the owner of the ica token.
+    pub fn ica_msg(
+        deps: DepsMut,
+        info: MessageInfo,
+        token_id: String,
+        msg: IcaControllerExecuteMsg,
+    ) -> Result<Response, ContractError> {
+        let state = STATE.load(deps.storage)?;
+
+        // verify that the sender is the owner of the token
+        let cw721_ica_extension = new_cw721_ica_extension_helper(state.cw721_ica_extension_address);
+        let owner = cw721_ica_extension
+            .owner_of(&deps.querier, &token_id, false)?
+            .owner;
+
+        if owner != info.sender {
+            return Err(ContractError::Unauthorized);
+        };
+
+        let ica_address = Addr::unchecked(NFT_ICA_BI_MAP.load(deps.storage, &token_id)?);
+        // additional hardening check
+        if !REGISTERED_ICA_ADDRS.has(deps.storage, &ica_address) {
+            return Err(ContractError::Unauthorized);
+        };
+
+        let cw_ica_controller = CwIcaControllerContract::new(ica_address);
+        let cosmos_msg = cw_ica_controller.call(msg)?;
+
+        Ok(Response::new().add_message(cosmos_msg))
     }
 
     /// Instantiate the cw721-ica extension contract using the instantiate2 pattern.
