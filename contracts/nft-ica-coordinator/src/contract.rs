@@ -3,9 +3,9 @@
 use cosmwasm_std::entry_point;
 use cosmwasm_std::{to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 
-use crate::types::ContractError;
 use crate::types::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
 use crate::types::state::{ContractState, STATE};
+use crate::types::ContractError;
 
 // version info for migration info
 const CONTRACT_NAME: &str = "crates.io:nft-ica";
@@ -53,6 +53,9 @@ pub fn execute(
 ) -> Result<Response, ContractError> {
     match msg {
         ExecuteMsg::UpdateOwnership(action) => execute::update_ownership(deps, env, info, action),
+        ExecuteMsg::ReceiveIcaCallback(callback) => {
+            execute::receive_ica_callback(deps, info, callback)
+        }
         _ => unimplemented!(),
     }
 }
@@ -97,10 +100,16 @@ mod instantiate {
 mod execute {
     use super::*;
 
-    use cosmwasm_std::{Addr, Api, CosmosMsg, QuerierWrapper};
-    use cw_ica_controller::types::msg::options::ChannelOpenInitOptions;
+    use cosmwasm_std::{Addr, Api, CosmosMsg, QuerierWrapper, WasmMsg};
+    use cw721_ica_extension::Extension;
+    use cw_ica_controller::types::{
+        callbacks::IcaControllerCallbackMsg, msg::options::ChannelOpenInitOptions,
+    };
 
-    use crate::utils;
+    use crate::{
+        types::state::{NFT_MINT_QUEUE, REGISTERED_ICA_ADDRS},
+        utils,
+    };
 
     /// Update the ownership of the contract.
     pub fn update_ownership(
@@ -111,6 +120,47 @@ mod execute {
     ) -> Result<Response, ContractError> {
         cw_ownable::update_ownership(deps, &env.block, &info.sender, action)?;
         Ok(Response::default())
+    }
+
+    pub fn receive_ica_callback(
+        deps: DepsMut,
+        info: MessageInfo,
+        callback: IcaControllerCallbackMsg,
+    ) -> Result<Response, ContractError> {
+        if !REGISTERED_ICA_ADDRS.has(deps.storage, &info.sender) {
+            return Err(ContractError::Unauthorized);
+        };
+
+        match callback {
+            IcaControllerCallbackMsg::OnChannelOpenAckCallback { ica_address, .. } => {
+                let queue_item = NFT_MINT_QUEUE
+                    .pop_back(deps.storage)?
+                    .ok_or(ContractError::QueueEmpty)?;
+
+                let cw721_ica_extension_address =
+                    STATE.load(deps.storage)?.cw721_ica_extension_address;
+
+                let msg = cw721_ica_extension::ExecuteMsg::Mint {
+                    token_id: queue_item.token_id,
+                    owner: queue_item.owner,
+                    token_uri: None,
+                    extension: Extension {
+                        ica_controller_address: info.sender,
+                        ica_address,
+                    },
+                };
+
+                let cosmos_msg: CosmosMsg = WasmMsg::Execute {
+                    contract_addr: cw721_ica_extension_address.to_string(),
+                    msg: to_json_binary(&msg)?,
+                    funds: vec![],
+                }
+                .into();
+
+                Ok(Response::new().add_message(cosmos_msg))
+            }
+            _ => Ok(Response::new()),
+        }
     }
 
     /// Instantiate the cw721-ica extension contract using the instantiate2 pattern.

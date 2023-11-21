@@ -16,7 +16,8 @@ pub enum ContractError {
     Instantiate2AddressError(#[from] Instantiate2AddressError),
 
     #[error("Unauthorized")]
-    Unauthorized {},
-    // Add any other custom errors you like here.
-    // Look at https://docs.rs/thiserror/1.0.21/thiserror/ for details.
+    Unauthorized,
+
+    #[error("Queue empty")]
+    QueueEmpty,
 }

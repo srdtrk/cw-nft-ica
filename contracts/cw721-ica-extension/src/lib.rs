@@ -2,7 +2,7 @@
 #![deny(missing_docs)]
 
 use cosmwasm_schema::cw_serde;
-use cosmwasm_std::{CustomMsg, Empty};
+use cosmwasm_std::{Empty, Addr};
 pub use cw721_base::{ContractError, InstantiateMsg, MinterResponse};
 
 // Version info for migration
@@ -11,39 +11,20 @@ const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// This is the ICA extension data that is stored with each token
 #[cw_serde]
-#[derive(Default)]
 pub struct Extension {
     /// The ICA controller contract's address
-    ica_controller_address: String,
-    /// The ICA address in the counterparty chain. This will be populated
-    /// by the minter contract once the ICA channel is established.
-    ica_address: Option<String>,
+    pub ica_controller_address: Addr,
+    /// The ICA address in the counterparty chain.
+    pub ica_address: String,
 }
 
 /// This is a wrapper around the [`cw721_base::Cw721Contract`] that adds the ICA extension
 pub type Cw721IcaExtensionContract<'a> =
-    cw721_base::Cw721Contract<'a, Extension, Empty, custom_msg::UpdateIcaAddressMsg, Empty>;
+    cw721_base::Cw721Contract<'a, Extension, Empty, Empty, Empty>;
 /// This is the execute message that this contract supports
-pub type ExecuteMsg = cw721_base::ExecuteMsg<Extension, custom_msg::UpdateIcaAddressMsg>;
+pub type ExecuteMsg = cw721_base::ExecuteMsg<Extension, Empty>;
 /// This is the query message that this contract supports
 pub type QueryMsg = cw721_base::QueryMsg<Empty>;
-
-/// This module contains the custom messages that this contract supports
-pub mod custom_msg {
-    use super::*;
-
-    /// This is the custom message that is used to update the ICA address
-    /// after the ICA channel is established.
-    #[cw_serde]
-    pub struct UpdateIcaAddressMsg {
-        /// The token ID of the token to update
-        pub token_id: String,
-        /// The ICA address in the counterparty chain
-        pub ica_address: String,
-    }
-
-    impl CustomMsg for UpdateIcaAddressMsg {}
-}
 
 /// This module contains the entry points for the contract
 #[cfg(not(feature = "library"))]
@@ -75,25 +56,7 @@ pub mod entry {
         info: MessageInfo,
         msg: ExecuteMsg,
     ) -> Result<Response, ContractError> {
-        match msg {
-            ExecuteMsg::Extension { msg } => {
-                cw_ownable::assert_owner(deps.storage, &info.sender)?;
-
-                let mut token = Cw721IcaExtensionContract::default()
-                    .tokens
-                    .load(deps.storage, &msg.token_id)?;
-                token.extension.ica_address = Some(msg.ica_address);
-
-                Cw721IcaExtensionContract::default().tokens.save(
-                    deps.storage,
-                    &msg.token_id,
-                    &token,
-                )?;
-
-                Ok(Response::default())
-            }
-            _ => Cw721IcaExtensionContract::default().execute(deps, env, info, msg),
-        }
+        Cw721IcaExtensionContract::default().execute(deps, env, info, msg)
     }
 
     /// This is the query entry point for the contract
@@ -158,8 +121,8 @@ mod tests {
         let token_id = "Enterprise";
         let token_uri = Some("https://starships.example.com/Starship/Enterprise.json".into());
         let extension = Extension {
-            ica_controller_address: "0x1234567890123456789012345678901234567890".into(),
-            ica_address: None,
+            ica_controller_address: Addr::unchecked("0x1234567890123456789012345678901234567890"),
+            ica_address: "0x1234567890123456789012345678901234567890".into(),
         };
         let exec_msg = ExecuteMsg::Mint {
             token_id: token_id.to_string(),

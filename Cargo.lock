@@ -671,6 +671,7 @@ dependencies = [
  "cw-storage-plus 1.2.0",
  "cw2 1.1.1",
  "cw721-base 0.18.0",
+ "cw721-ica-extension",
  "schemars",
  "serde",
  "thiserror",

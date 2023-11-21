@@ -27,3 +27,4 @@ cw-ica-controller = { version = "0.2.0", default-features = false }
 cw-ownable = "0.5.1"
 cw721 = "0.18.0"
 cw721-base = { version = "0.18.0", features = ["library"] }
+cw721-ica-extension = { version = "0.1.0", path = "./contracts/cw721-ica-extension" }

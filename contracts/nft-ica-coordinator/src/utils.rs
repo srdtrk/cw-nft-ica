@@ -42,8 +42,41 @@ pub fn instantiate2_contract(
 
 /// Contains the storage utilities.
 pub mod storage {
-    use cosmwasm_std::{Storage, StdResult};
-    use cw_storage_plus::Map;
+    use cosmwasm_schema::cw_serde;
+    use cosmwasm_std::{StdResult, Storage};
+    use cw_storage_plus::{Map, PrimaryKey};
+
+    /// A set of keys.
+    pub struct KeySet<'a, K>(Map<'a, K, NoValue>);
+
+    #[cw_serde]
+    struct NoValue {}
+
+    impl<'a, K> KeySet<'a, K>
+    where
+        K: PrimaryKey<'a>,
+    {
+        /// Create a new set of keys.
+        pub const fn new(namespace: &'a str) -> Self {
+            Self(Map::new(namespace))
+        }
+
+        /// Insert a new key.
+        pub fn insert(&self, store: &mut dyn Storage, key: K) -> StdResult<()> {
+            self.0.save(store, key, &NoValue {})
+        }
+
+        /// Check if the given key exists.
+        pub fn has(&self, store: &dyn Storage, key: K) -> bool {
+            self.0.has(store, key)
+        }
+
+        /// Remove the given key.
+        /// Does not return an error if the key does not exist.
+        pub fn remove(&self, store: &mut dyn Storage, key: K) {
+            self.0.remove(store, key)
+        }
+    }
 
     /// The bi-directional map between ICA addresses and NFT IDs.
     pub struct NftIcaBiMap<'a, 'b>(Map<'a, &'b str, String>);
@@ -55,7 +88,12 @@ pub mod storage {
         }
 
         /// Insert a new ICA address and NFT ID pair.
-        pub fn insert(&self, store: &mut dyn Storage, ica_addr: impl Into<String>, nft_id: impl Into<String>) -> StdResult<()> {
+        pub fn insert(
+            &self,
+            store: &mut dyn Storage,
+            ica_addr: impl Into<String>,
+            nft_id: impl Into<String>,
+        ) -> StdResult<()> {
             let ica_addr = ica_addr.into();
             let nft_id = nft_id.into();
 
@@ -95,20 +133,42 @@ pub mod storage {
 
             let nft_ica_bi_map = NftIcaBiMap::new("nft_ica_bi_map");
 
-            nft_ica_bi_map.insert(&mut storage, "ica-addr-1", "nft-id-1").unwrap();
-            nft_ica_bi_map.insert(&mut storage, "ica-addr-2", "nft-id-2").unwrap();
+            nft_ica_bi_map
+                .insert(&mut storage, "ica-addr-1", "nft-id-1")
+                .unwrap();
+            nft_ica_bi_map
+                .insert(&mut storage, "ica-addr-2", "nft-id-2")
+                .unwrap();
 
-            assert_eq!(nft_ica_bi_map.load(&storage, "ica-addr-1").unwrap(), "nft-id-1");
-            assert_eq!(nft_ica_bi_map.load(&storage, "nft-id-1").unwrap(), "ica-addr-1");
-            assert_eq!(nft_ica_bi_map.load(&storage, "ica-addr-2").unwrap(), "nft-id-2");
-            assert_eq!(nft_ica_bi_map.load(&storage, "nft-id-2").unwrap(), "ica-addr-2");
+            assert_eq!(
+                nft_ica_bi_map.load(&storage, "ica-addr-1").unwrap(),
+                "nft-id-1"
+            );
+            assert_eq!(
+                nft_ica_bi_map.load(&storage, "nft-id-1").unwrap(),
+                "ica-addr-1"
+            );
+            assert_eq!(
+                nft_ica_bi_map.load(&storage, "ica-addr-2").unwrap(),
+                "nft-id-2"
+            );
+            assert_eq!(
+                nft_ica_bi_map.load(&storage, "nft-id-2").unwrap(),
+                "ica-addr-2"
+            );
 
             nft_ica_bi_map.remove(&mut storage, "ica-addr-1").unwrap();
 
             assert!(nft_ica_bi_map.load(&storage, "ica-addr-1").is_err());
             assert!(nft_ica_bi_map.load(&storage, "nft-id-1").is_err());
-            assert_eq!(nft_ica_bi_map.load(&storage, "ica-addr-2").unwrap(), "nft-id-2");
-            assert_eq!(nft_ica_bi_map.load(&storage, "nft-id-2").unwrap(), "ica-addr-2");
+            assert_eq!(
+                nft_ica_bi_map.load(&storage, "ica-addr-2").unwrap(),
+                "nft-id-2"
+            );
+            assert_eq!(
+                nft_ica_bi_map.load(&storage, "nft-id-2").unwrap(),
+                "ica-addr-2"
+            );
 
             nft_ica_bi_map.remove(&mut storage, "nft-id-2").unwrap();
 
