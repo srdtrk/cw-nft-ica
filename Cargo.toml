@@ -11,7 +11,7 @@ rust-version  = "1.73"
 keywords      = ["cosmos", "cosmwasm", "ibc", "nft", "ica"]
 authors       = ["srdtrk <srdtrk@hotmail.com>"]
 
-[package.metadata.scripts]
+[workspace.metadata.scripts]
 optimize = """docker run --rm -v "$(pwd)":/code \
   --mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
   --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
