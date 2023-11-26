@@ -50,7 +50,7 @@ func TestWithContractTestSuite(t *testing.T) {
 	suite.Run(t, new(ContractTestSuite))
 }
 
-func (s *ContractTestSuite) TestInstantiateContract() {
+func (s *ContractTestSuite) TestContractInstantiate() {
 	ctx := context.Background()
 
 	s.SetupContractTestSuite(ctx)
