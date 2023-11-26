@@ -35,11 +35,12 @@ jobs:
         with:
           command: install
           args: cargo-run-script
-      - name: Build Optimized Contract
-        uses: actions-rs/cargo@v1
-        with:
-          command: run-script
-          args: optimize
+      - name: Build Optimized Contracts
+        run: |
+          docker run --rm -v "$(pwd)":/code \
+            --mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
+            --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
+            cosmwasm/optimizer:0.15.0
       - name: Build Ica Controller Contract with Docker
         run: |
           cd third_party/cw-ica-controller 
