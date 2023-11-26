@@ -56,4 +56,14 @@ pub enum ExecuteMsg {
 #[cw_ownable::cw_ownable_query]
 #[cw_serde]
 #[derive(QueryResponses)]
-pub enum QueryMsg {}
+pub enum QueryMsg {
+    /// GetContractState returns the contact's state.
+    #[returns(crate::types::state::ContractState)]
+    GetContractState {},
+    /// NftIcaBimap queries the ICA NFT ID to ICA ID mapping.
+    #[returns(String)]
+    NftIcaBimap {
+        /// The token ID or ICA address to query.
+        key: String
+    },
+}

@@ -63,7 +63,8 @@ pub fn execute(
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Ownership {} => to_json_binary(&cw_ownable::get_ownership(deps.storage)?),
-        _ => unimplemented!(),
+        QueryMsg::GetContractState {} => to_json_binary(&query::state(deps)?),
+        QueryMsg::NftIcaBimap { key } => to_json_binary(&query::nft_ica_bimap(deps, key)?),
     }
 }
 
@@ -250,6 +251,24 @@ mod execute {
         let label = format!("cw-ica-controller-{}", env.block.height);
 
         utils::instantiate2_contract(api, querier, env, code_id, salt, label, instantiate_msg)
+    }
+}
+
+mod query {
+    use super::*;
+
+    use crate::types::state::NFT_ICA_BI_MAP;
+
+    use cosmwasm_std::StdResult;
+
+    /// Query the contract state.
+    pub fn state(deps: Deps) -> StdResult<ContractState> {
+        STATE.load(deps.storage)
+    }
+
+    /// Query the ICA NFT ID to ICA ID mapping.
+    pub fn nft_ica_bimap(deps: Deps, key: String) -> StdResult<String> {
+        NFT_ICA_BI_MAP.load(deps.storage, &key)
     }
 }
 

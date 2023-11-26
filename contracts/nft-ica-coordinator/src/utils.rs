@@ -37,7 +37,7 @@ pub fn instantiate2_contract(
         salt: salt.as_bytes().into(),
     };
 
-    return Ok((instantiate_msg.into(), contract_addr));
+    Ok((instantiate_msg.into(), contract_addr))
 }
 
 /// Contains the storage utilities.
