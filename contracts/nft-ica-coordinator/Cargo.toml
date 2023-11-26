@@ -1,5 +1,5 @@
 [package]
-name = "nft-ica"
+name = "nft-ica-coordinator"
 version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
@@ -26,4 +26,4 @@ thiserror = { workspace = true }
 cw-ica-controller = { workspace = true }
 cw-ownable = { workspace = true }
 cw721-base = { workspace = true }
-cw721-ica-extension = { workspace = true }
+cw721-ica-extension = { workspace = true, features = ["library"] }
