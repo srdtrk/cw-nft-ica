@@ -41,14 +41,6 @@ jobs:
             --mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
             --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
             cosmwasm/optimizer:0.15.0
-      - name: Build Ica Controller Contract with Docker
-        run: |
-          cd third_party/cw-ica-controller
-          docker run --rm -v "$(pwd)":/code \
-            --mount type=volume,source="$(basename "$(pwd)")_cache",target=/code/target \
-            --mount type=volume,source=registry_cache,target=/usr/local/cargo/registry \
-            cosmwasm/optimizer:0.15.0
-          cp artifacts/cw_ica_controller.wasm ../../artifacts/
       - name: Setup Go
         uses: actions/setup-go@v4
         with:
