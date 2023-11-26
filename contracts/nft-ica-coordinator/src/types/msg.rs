@@ -64,6 +64,6 @@ pub enum QueryMsg {
     #[returns(String)]
     NftIcaBimap {
         /// The token ID or ICA address to query.
-        key: String
+        key: String,
     },
 }
