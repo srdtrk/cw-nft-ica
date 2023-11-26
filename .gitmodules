@@ -1,3 +1,0 @@
-[submodule "external_contracts/cw-ica-controller"]
-	path = third_party/cw-ica-controller
-	url = https://github.com/srdtrk/cw-ica-controller/
