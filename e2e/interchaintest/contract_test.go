@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/suite"
@@ -34,16 +33,6 @@ func (s *ContractTestSuite) SetupContractTestSuite(ctx context.Context) {
 		"--gas", "500000",
 	)
 	s.Require().NoError(err)
-
-	// // Wait for the channel to get set up
-	// err = testutil.WaitForBlocks(ctx, 5, s.ChainA, s.ChainB)
-	// s.Require().NoError(err)
-	//
-	// contractState, err := s.Contract.QueryContractState(ctx)
-	// s.Require().NoError(err)
-	//
-	// s.IcaAddress = contractState.IcaInfo.IcaAddress
-	// s.Contract.SetIcaAddress(s.IcaAddress)
 }
 
 func TestWithContractTestSuite(t *testing.T) {
@@ -59,14 +48,4 @@ func (s *ContractTestSuite) TestContractInstantiate() {
 
 	s.Run("TestInstantiate", func() {
 	})
-}
-
-// toJSONString returns a string representation of the given value
-// by marshaling it to JSON. It panics if marshaling fails.
-func toJSONString(v any) string {
-	bz, err := json.Marshal(v)
-	if err != nil {
-		panic(err)
-	}
-	return string(bz)
 }
