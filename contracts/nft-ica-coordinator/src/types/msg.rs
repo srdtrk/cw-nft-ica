@@ -62,8 +62,14 @@ pub enum QueryMsg {
     GetContractState {},
     /// NftIcaBimap queries the ICA NFT ID to ICA ID mapping.
     #[returns(String)]
-    NftIcaBimap {
+    NftIcaControllerBimap {
         /// The token ID or ICA address to query.
         key: String,
+    },
+    /// GetIcaControllerAddress returns the ICA controller address for the given ICA NFT.
+    #[returns(String)]
+    GetIcaAddress {
+        /// The token ID of the ICA NFT.
+        token_id: String,
     },
 }

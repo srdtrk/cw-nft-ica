@@ -112,10 +112,10 @@ pub mod storage {
         /// Does not return an error if the key does not exist.
         /// Returns an error if there are issues parsing the value associated with the given key.
         pub fn remove(&self, store: &mut dyn Storage, key: &str) -> StdResult<()> {
-            self.0.may_load(store, key)?.map(|value| {
+            if let Some(value) = self.0.may_load(store, key)? {
                 self.0.remove(store, key);
                 self.0.remove(store, &value);
-            });
+            }
 
             Ok(())
         }

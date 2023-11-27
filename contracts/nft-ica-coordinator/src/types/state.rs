@@ -4,19 +4,19 @@ use cosmwasm_schema::cw_serde;
 
 pub use contract::ContractState;
 use cosmwasm_std::Addr;
-use cw_storage_plus::{Deque, Item};
+use cw_storage_plus::{Deque, Item, Map};
 pub use mint::QueueItem;
 
 use crate::utils::storage::{KeySet, NftIcaBiMap};
 
 /// The item used to store the state of the IBC application.
 pub const STATE: Item<ContractState> = Item::new("state");
-/// The item used to store the ICA counter.
-// pub const ICA_COUNTER: Item<u64> = Item::new("ica_counter");
+/// The map used to map nft token ids to ICA addresses.
+pub const NFT_ICA_MAP: Map<&str, String> = Map::new("nft_ica_map");
 /// The keyset used to store the registered ICA addresses to accept callbacks from.
 pub const REGISTERED_ICA_ADDRS: KeySet<&Addr> = KeySet::new("registered_ica");
-/// The item used to store the bi-directional map between ICA addresses and NFT IDs.
-pub const NFT_ICA_BI_MAP: NftIcaBiMap = NftIcaBiMap::new("nft_ica_bi_map");
+/// The item used to store the bi-directional map between cw-ica-controller address and NFT IDs.
+pub const NFT_ICA_CONTRACT_BI_MAP: NftIcaBiMap = NftIcaBiMap::new("nft_ica_contract_bi_map");
 /// NFT_MINT_QUEUE is the queue of NFT mint requests, waiting for a callback from the ICA controller contract.
 pub const NFT_MINT_QUEUE: Deque<mint::QueueItem> = Deque::new("nft_mint_queue");
 /// The item used to store the NFT-ICA counter.

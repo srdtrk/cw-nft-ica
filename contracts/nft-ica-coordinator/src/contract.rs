@@ -64,7 +64,12 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
         QueryMsg::Ownership {} => to_json_binary(&cw_ownable::get_ownership(deps.storage)?),
         QueryMsg::GetContractState {} => to_json_binary(&query::state(deps)?),
-        QueryMsg::NftIcaBimap { key } => to_json_binary(&query::nft_ica_bimap(deps, key)?),
+        QueryMsg::NftIcaControllerBimap { key } => {
+            to_json_binary(&query::nft_ica_controller_bimap(deps, key)?)
+        }
+        QueryMsg::GetIcaAddress { token_id } => {
+            to_json_binary(&query::get_ica_address(deps, token_id)?)
+        }
     }
 }
 
@@ -111,7 +116,8 @@ mod execute {
 
     use crate::{
         types::state::{
-            QueueItem, NFT_ICA_BI_MAP, NFT_MINT_QUEUE, REGISTERED_ICA_ADDRS, TOKEN_COUNTER,
+            QueueItem, NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP, NFT_MINT_QUEUE, REGISTERED_ICA_ADDRS,
+            TOKEN_COUNTER,
         },
         utils,
     };
@@ -176,7 +182,9 @@ mod execute {
                 let cw721_ica_extension_address =
                     STATE.load(deps.storage)?.cw721_ica_extension_address;
 
-                NFT_ICA_BI_MAP.insert(deps.storage, &ica_address, &queue_item.token_id)?;
+                NFT_ICA_CONTRACT_BI_MAP.insert(deps.storage, &info.sender, &queue_item.token_id)?;
+
+                NFT_ICA_MAP.save(deps.storage, &queue_item.token_id, &ica_address)?;
 
                 let msg = cw721_ica_extension::ExecuteMsg::Mint {
                     token_id: queue_item.token_id,
@@ -220,7 +228,7 @@ mod execute {
             return Err(ContractError::Unauthorized);
         };
 
-        let ica_address = Addr::unchecked(NFT_ICA_BI_MAP.load(deps.storage, &token_id)?);
+        let ica_address = Addr::unchecked(NFT_ICA_CONTRACT_BI_MAP.load(deps.storage, &token_id)?);
         // additional hardening check
         if !REGISTERED_ICA_ADDRS.has(deps.storage, &ica_address) {
             return Err(ContractError::Unauthorized);
@@ -257,7 +265,7 @@ mod execute {
 mod query {
     use super::*;
 
-    use crate::types::state::NFT_ICA_BI_MAP;
+    use crate::types::state::{NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP};
 
     use cosmwasm_std::StdResult;
 
@@ -267,8 +275,13 @@ mod query {
     }
 
     /// Query the ICA NFT ID to ICA ID mapping.
-    pub fn nft_ica_bimap(deps: Deps, key: String) -> StdResult<String> {
-        NFT_ICA_BI_MAP.load(deps.storage, &key)
+    pub fn nft_ica_controller_bimap(deps: Deps, key: String) -> StdResult<String> {
+        NFT_ICA_CONTRACT_BI_MAP.load(deps.storage, &key)
+    }
+
+    /// Query the ICA controller address for a given ICA NFT ID.
+    pub fn get_ica_address(deps: Deps, token_id: String) -> StdResult<String> {
+        NFT_ICA_MAP.load(deps.storage, &token_id)
     }
 }
 
