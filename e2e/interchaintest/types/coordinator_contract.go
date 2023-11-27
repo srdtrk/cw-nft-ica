@@ -76,6 +76,11 @@ func StoreAndInstantiateNewCoordinatorContract(
 	return coordContract, nil
 }
 
+// MintIca mints an ICA-NFT for the caller
+func (c *CoordinatorContract) MintIca(ctx context.Context, callerKeyName string, salt *string, extraExecTxArgs ...string) error {
+	return c.Execute(ctx, callerKeyName, newCoordinatorMintIcaMsg(salt), extraExecTxArgs...)
+}
+
 // QueryContractState queries the contract's state
 func (c *CoordinatorContract) QueryContractState(ctx context.Context) (*CoordinatorContractState, error) {
 	queryResp := QueryResponse[CoordinatorContractState]{}
@@ -90,4 +95,19 @@ func (c *CoordinatorContract) QueryContractState(ctx context.Context) (*Coordina
 	}
 
 	return &contractState, nil
+}
+
+func (c *CoordinatorContract) QueryNftIcaBimap(ctx context.Context, key string) (*string, error) {
+	queryResp := QueryResponse[string]{}
+	err := c.chain.QueryContract(ctx, c.Address, newNftIcaBimapQueryMsg(key), &queryResp)
+	if err != nil {
+		return nil, err
+	}
+
+	ica, err := queryResp.GetResp()
+	if err != nil {
+		return nil, err
+	}
+
+	return &ica, nil
 }

@@ -18,7 +18,7 @@ func NewSendCustomIcaMessagesMsg(cdc codec.BinaryCodec, msgs []proto.Message, en
 
 // NewGetChannelQueryMsg is a wrapper for newGetChannelQueryMsg for internal testing
 func NewGetChannelQueryMsg() map[string]interface{} {
-	return newGetCallbackCounterQueryMsg()
+	return newGetChannelQueryMsg()
 }
 
 // NewGetContractStateQueryMsg is a wrapper for newGetContractStateQueryMsg for internal testing
@@ -29,4 +29,9 @@ func NewGetContractStateQueryMsg() map[string]interface{} {
 // NewGetCallbackCounterQueryMsg is a wrapper for newGetCallbackCounterQueryMsg for internal testing
 func NewGetCallbackCounterQueryMsg() map[string]interface{} {
 	return newGetCallbackCounterQueryMsg()
+}
+
+// NewCoordinatorMintIcaMsg is a wrapper for internal testing
+func NewCoordinatorMintIcaMsg(salt *string) string {
+	return newCoordinatorMintIcaMsg(salt)
 }

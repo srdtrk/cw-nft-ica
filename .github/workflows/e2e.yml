@@ -24,7 +24,7 @@ jobs:
     strategy:
       matrix:
         test:
-          - TestContractInstantiate
+          - TestMintIca
     name: ${{ matrix.test }}
     runs-on: ubuntu-latest
     steps:
