@@ -4,6 +4,8 @@ import (
 	"context"
 	"strconv"
 
+	"github.com/cosmos/gogoproto/proto"
+
 	"github.com/strangelove-ventures/interchaintest/v7/chain/cosmos"
 )
 
@@ -81,6 +83,11 @@ func (c *CoordinatorContract) MintIca(ctx context.Context, callerKeyName string,
 	return c.Execute(ctx, callerKeyName, newCoordinatorMintIcaMsg(salt), extraExecTxArgs...)
 }
 
+// ExecuteCustomIcaMsgs executes custom ICA messages
+func (c *CoordinatorContract) ExecuteCustomIcaMsgs(ctx context.Context, callerKeyName string, tokenID string, msgs []proto.Message, encoding string, memo *string, timeout *uint64, extraExecTxArgs ...string) error {
+	return c.Execute(ctx, callerKeyName, newCoordinatorIcaCustomMsg(c.chain.Config().EncodingConfig.Codec, tokenID, msgs, encoding, memo, timeout), extraExecTxArgs...)
+}
+
 // QueryContractState queries the contract's state
 func (c *CoordinatorContract) QueryContractState(ctx context.Context) (*CoordinatorContractState, error) {
 	queryResp := QueryResponse[CoordinatorContractState]{}
@@ -97,17 +104,34 @@ func (c *CoordinatorContract) QueryContractState(ctx context.Context) (*Coordina
 	return &contractState, nil
 }
 
-func (c *CoordinatorContract) QueryNftIcaBimap(ctx context.Context, key string) (*string, error) {
+// QueryNftIcaBimap queries the contract's state
+func (c *CoordinatorContract) QueryNftIcaBimap(ctx context.Context, key string) (string, error) {
 	queryResp := QueryResponse[string]{}
 	err := c.chain.QueryContract(ctx, c.Address, newNftIcaBimapQueryMsg(key), &queryResp)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	ica, err := queryResp.GetResp()
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	return &ica, nil
+	return ica, nil
+}
+
+// QueryNftIcaBimap queries the contract's state
+func (c *CoordinatorContract) QueryIcaAddress(ctx context.Context, tokenID string) (string, error) {
+	queryResp := QueryResponse[string]{}
+	err := c.chain.QueryContract(ctx, c.Address, newGetIcaAddressQueryMsg(tokenID), &queryResp)
+	if err != nil {
+		return "", err
+	}
+
+	ica, err := queryResp.GetResp()
+	if err != nil {
+		return "", err
+	}
+
+	return ica, nil
 }

@@ -21,8 +21,6 @@ func TestInstantiateMsg(t *testing.T) {
 }
 
 func TestExecuteMsgs(t *testing.T) {
-	const testAddress = "srdtrk"
-
 	t.Parallel()
 
 	// Test Coordinator Messgaes

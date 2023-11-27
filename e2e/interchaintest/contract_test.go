@@ -3,14 +3,22 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
+	"github.com/cosmos/gogoproto/proto"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/strangelove-ventures/interchaintest/v7/testutil"
+	sdkmath "cosmossdk.io/math"
+
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types/v1beta1"
 
 	icatypes "github.com/cosmos/ibc-go/v7/modules/apps/27-interchain-accounts/types"
 	channeltypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
+
+	"github.com/strangelove-ventures/interchaintest/v7/testutil"
 
 	mysuite "github.com/srdtrk/cw-ica-controller/interchaintest/v2/testsuite"
 	"github.com/srdtrk/cw-ica-controller/interchaintest/v2/types"
@@ -19,7 +27,8 @@ import (
 type ContractTestSuite struct {
 	mysuite.TestSuite
 
-	Contract *types.CoordinatorContract
+	Contract    *types.CoordinatorContract
+	NftContract *types.Cw721Contract
 }
 
 // SetupContractTestSuite starts the chains, relayer, creates the user accounts, creates the ibc clients and connections,
@@ -39,22 +48,29 @@ func (s *ContractTestSuite) SetupContractTestSuite(ctx context.Context) {
 		"--gas", "500000",
 	)
 	s.Require().NoError(err)
+
+	contractState, err := s.Contract.QueryContractState(ctx)
+	s.Require().NoError(err)
+
+	s.NftContract = types.NewCw721Contract(types.NewContract(contractState.Cw721IcaExtensionAddress, cw721CodeId, s.ChainA))
 }
 
 func TestWithContractTestSuite(t *testing.T) {
 	suite.Run(t, new(ContractTestSuite))
 }
 
-func (s *ContractTestSuite) TestMintIca() {
+func (s *ContractTestSuite) TestMintAndExecute() {
 	ctx := context.Background()
 
 	s.SetupContractTestSuite(ctx)
 	wasmd, simd := s.ChainA, s.ChainB
 	wasmdUser := s.UserA
 
+	firstTokenID := "ica-token-0"
+
+	var icaContract *types.IcaContract
 	s.Run("TestMintIca", func() {
 		// Mint a new ICA for the user
-		// err := s.Contract.Execute(ctx, wasmdUser.KeyName(), `{ "mint_ica": {} }`, "--gas", "500000")
 		err := s.Contract.MintIca(ctx, wasmdUser.KeyName(), nil, "--gas", "500000")
 		s.Require().NoError(err)
 
@@ -62,11 +78,11 @@ func (s *ContractTestSuite) TestMintIca() {
 		err = testutil.WaitForBlocks(ctx, 7, s.ChainA, s.ChainB)
 		s.Require().NoError(err)
 
-		// Check that the ICA was minted and contract created
-		icaContractAddress, err := s.Contract.QueryNftIcaBimap(ctx, "ica-token-0")
+		// Check that the ICA channel was opened:
+		icaContractAddress, err := s.Contract.QueryNftIcaBimap(ctx, firstTokenID)
 		s.Require().NoError(err)
 
-		icaContract := types.NewIcaContract(types.NewContract(*icaContractAddress, "0", wasmd))
+		icaContract = types.NewIcaContract(types.NewContract(icaContractAddress, "0", wasmd))
 
 		// Test if the handshake was successful
 		wasmdChannels, err := s.Relayer.GetChannels(ctx, s.ExecRep, wasmd.Config().ChainID)
@@ -94,6 +110,64 @@ func (s *ContractTestSuite) TestMintIca() {
 		s.Require().Equal(icatypes.HostPortID, simdChannel.PortID)
 		s.Require().Equal(icaContract.Port(), simdChannel.Counterparty.PortID)
 		s.Require().Equal(channeltypes.OPEN.String(), simdChannel.State)
+
+		// Check that the NFT was minted
+		tokensResp, err := s.NftContract.QueryTokens(ctx, wasmdUser.FormattedAddress())
+		s.Require().NoError(err)
+
+		s.Require().Equal(1, len(tokensResp.Tokens))
+		s.Require().Equal(firstTokenID, tokensResp.Tokens[0])
+	})
+
+	s.Run("TestExecuteCustomIcaMsg", func() {
+		// Get ICA address
+		icaAddress, err := s.Contract.QueryIcaAddress(ctx, firstTokenID)
+		s.Require().NoError(err)
+
+		// Fund the ICA address:
+		s.FundAddressChainB(ctx, icaAddress)
+
+		// Send custom ICA messages through the contract:
+		// Let's create a governance proposal on simd and deposit some funds to it.
+		testProposal := govtypes.TextProposal{
+			Title:       "IBC Gov Proposal",
+			Description: "tokens for all!",
+		}
+		protoAny, err := codectypes.NewAnyWithValue(&testProposal)
+		s.Require().NoError(err)
+		proposalMsg := &govtypes.MsgSubmitProposal{
+			Content:        protoAny,
+			InitialDeposit: sdk.NewCoins(sdk.NewCoin(simd.Config().Denom, sdkmath.NewInt(5000))),
+			Proposer:       icaAddress,
+		}
+
+		// Create deposit message:
+		depositMsg := &govtypes.MsgDeposit{
+			ProposalId: 1,
+			Depositor:  icaAddress,
+			Amount:     sdk.NewCoins(sdk.NewCoin(simd.Config().Denom, sdkmath.NewInt(10000000))),
+		}
+
+		// Execute the contract:
+		err = s.Contract.ExecuteCustomIcaMsgs(ctx, wasmdUser.KeyName(), firstTokenID, []proto.Message{proposalMsg, depositMsg}, icatypes.EncodingProtobuf, nil, nil, "--gas", "500000")
+		s.Require().NoError(err)
+
+		err = testutil.WaitForBlocks(ctx, 5, wasmd, simd)
+		s.Require().NoError(err)
+
+		// Check if contract callbacks were executed:
+		callbackCounter, err := icaContract.QueryCallbackCounter(ctx)
+		s.Require().NoError(err)
+
+		s.Require().Equal(uint64(1), callbackCounter.Success)
+		s.Require().Equal(uint64(0), callbackCounter.Error)
+
+		// Check if the proposal was created:
+		proposal, err := simd.QueryProposal(ctx, "1")
+		s.Require().NoError(err)
+		s.Require().Equal(simd.Config().Denom, proposal.TotalDeposit[0].Denom)
+		s.Require().Equal(fmt.Sprint(10000000+5000), proposal.TotalDeposit[0].Amount)
+		// We do not check title and description of the proposal because this is a legacy proposal.
 	})
 }
 

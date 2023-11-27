@@ -93,7 +93,7 @@ func newCoordinatorIcaCustomMsg(cdc codec.BinaryCodec, tokenID string, msgs []pr
 }
 
 type CoordinatorExecuteMsg struct {
-	MintIca       *CoordinatorMintIcaMsg    `json:"mint_ica,omitempty""`
+	MintIca       *CoordinatorMintIcaMsg    `json:"mint_ica,omitempty"`
 	ExecuteIcaMsg *CoordinatorExecuteIcaMsg `json:"execute_ica_msg,omitempty"`
 }
 
@@ -120,6 +120,14 @@ func newNftIcaBimapQueryMsg(key string) map[string]interface{} {
 	return map[string]interface{}{
 		"nft_ica_controller_bimap": map[string]interface{}{
 			"key": key,
+		},
+	}
+}
+
+func newGetIcaAddressQueryMsg(tokenID string) map[string]interface{} {
+	return map[string]interface{}{
+		"get_ica_address": map[string]interface{}{
+			"token_id": tokenID,
 		},
 	}
 }
