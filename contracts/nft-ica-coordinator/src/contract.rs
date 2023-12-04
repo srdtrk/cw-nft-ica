@@ -1,9 +1,9 @@
 //! This module handles the execution logic of the contract.
 
-use cosmwasm_std::entry_point;
+use cosmwasm_std::{entry_point, Addr, Reply, StdError};
 use cosmwasm_std::{to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 
-use crate::types::keys;
+use crate::types::keys::{self, CW721_INSTANTIATE_REPLY_ID, CW_ICA_CONTROLLER_INSTANTIATE_REPLY_ID};
 use crate::types::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
 use crate::types::state::{ContractState, STATE};
 use crate::types::ContractError;
@@ -21,23 +21,20 @@ pub fn instantiate(
     let owner = msg.owner.unwrap_or(info.sender.to_string());
     cw_ownable::initialize_owner(deps.storage, deps.api, Some(&owner))?;
 
-    let (cosmos_msg, contract_addr) = instantiate::instantiate2_cw721_ica_extension(
-        deps.api,
-        deps.querier,
-        env,
-        msg.cw721_ica_extension_code_id,
-        msg.salt,
-    )?;
+    let instantiate_submsg =
+        instantiate::instantiate_cw721_ica_extension(env, msg.cw721_ica_extension_code_id)?;
 
     let state = ContractState {
         default_chan_init_options: msg.default_chan_init_options,
         ica_controller_code_id: msg.ica_controller_code_id,
-        cw721_ica_extension_address: contract_addr,
+        // TODO: remove this once injective supports instantiate2 (There is already a branch which supports it).
+        // Must be filled in by the reply from the cw721-ica-extension contract.
+        cw721_ica_extension_address: Addr::unchecked("".to_string()),
     };
 
     STATE.save(deps.storage, &state)?;
 
-    Ok(Response::new().add_message(cosmos_msg))
+    Ok(Response::new().add_submessage(instantiate_submsg))
 }
 
 /// Execute the contract.
@@ -73,15 +70,27 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     }
 }
 
+/// Reply to a submessage.
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> StdResult<Response> {
+    match msg.id {
+        CW721_INSTANTIATE_REPLY_ID => reply::cw721_instantiate(deps, msg),
+        CW_ICA_CONTROLLER_INSTANTIATE_REPLY_ID => reply::cw_ica_controller_instantiate(deps, msg),
+        id => Err(StdError::generic_err(format!("Unknown reply id: {}", id))),
+    }
+}
+
 mod instantiate {
-    use crate::utils;
+    use crate::{types::keys::CW721_INSTANTIATE_REPLY_ID, utils};
 
     use super::*;
 
-    use cosmwasm_std::{Addr, Api, CosmosMsg, QuerierWrapper};
+    use cosmwasm_std::{Addr, Api, CosmosMsg, QuerierWrapper, SubMsg, WasmMsg};
 
-    /// Instantiate the cw721-ica extension contract using the instantiate2 pattern.
+    /// Instantiate the cw721-ica-extension contract using the instantiate2 pattern.
     /// Returns the instantiate2 message and the contract address.
+    ///
+    /// This is ignored since injective doesn't seem to support instantiate2.
     pub fn instantiate2_cw721_ica_extension(
         api: &dyn Api,
         querier: QuerierWrapper,
@@ -99,12 +108,36 @@ mod instantiate {
 
         utils::instantiate2_contract(api, querier, env, code_id, salt, label, instantiate_msg)
     }
+
+    /// Instantiate the cw721-ica-extension contract using the submessage pattern.
+    /// Returns the instantiate submessage whose reply will contain the new contract address.
+    pub fn instantiate_cw721_ica_extension(
+        env: Env,
+        code_id: u64,
+    ) -> Result<SubMsg, ContractError> {
+        let instantiate_msg = WasmMsg::Instantiate {
+            admin: Some(env.contract.address.to_string()),
+            code_id,
+            msg: to_json_binary(&cw721_base::InstantiateMsg {
+                name: "NFT-ICA".to_string(),
+                symbol: "ICA".to_string(),
+                minter: env.contract.address.to_string(),
+            })?,
+            label: format!("cw721-ica-{}", env.block.height),
+            funds: vec![],
+        };
+
+        Ok(SubMsg::reply_on_success(
+            instantiate_msg,
+            CW721_INSTANTIATE_REPLY_ID,
+        ))
+    }
 }
 
 mod execute {
     use super::*;
 
-    use cosmwasm_std::{Addr, Api, CosmosMsg, QuerierWrapper, WasmMsg};
+    use cosmwasm_std::{Addr, Api, CosmosMsg, QuerierWrapper, WasmMsg, SubMsg};
     use cw721_ica_extension::{helpers::new_cw721_ica_extension_helper, Extension};
     use cw_ica_controller::{
         helpers::CwIcaControllerContract,
@@ -115,10 +148,10 @@ mod execute {
     };
 
     use crate::{
-        types::state::{
+        types::{state::{
             QueueItem, NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP, NFT_MINT_QUEUE, REGISTERED_ICA_ADDRS,
             TOKEN_COUNTER,
-        },
+        }, keys::CW_ICA_CONTROLLER_INSTANTIATE_REPLY_ID},
         utils,
     };
 
@@ -138,7 +171,7 @@ mod execute {
         deps: DepsMut,
         env: Env,
         info: MessageInfo,
-        salt: Option<String>,
+        _salt: Option<String>,
     ) -> Result<Response, ContractError> {
         let state = STATE.load(deps.storage)?;
         let ica_count = TOKEN_COUNTER.may_load(deps.storage)?.unwrap_or_default();
@@ -150,18 +183,24 @@ mod execute {
 
         NFT_MINT_QUEUE.push_front(deps.storage, &queue_item)?;
 
-        let (cosmos_msg, contract_addr) = instantiate2_cw_ica_controller(
-            deps.api,
-            deps.querier,
+        // let (cosmos_msg, contract_addr) = instantiate2_cw_ica_controller(
+        //     deps.api,
+        //     deps.querier,
+        //     env,
+        //     state.ica_controller_code_id,
+        //     salt,
+        //     Some(state.default_chan_init_options),
+        // )?;
+
+        let instantiate_submsg = instantiate_cw_ica_controller(
             env,
             state.ica_controller_code_id,
-            salt,
             Some(state.default_chan_init_options),
         )?;
 
-        REGISTERED_ICA_ADDRS.insert(deps.storage, &contract_addr)?;
+        // REGISTERED_ICA_ADDRS.insert(deps.storage, &contract_addr)?;
 
-        Ok(Response::new().add_message(cosmos_msg))
+        Ok(Response::new().add_submessage(instantiate_submsg))
     }
 
     pub fn receive_ica_callback(
@@ -242,6 +281,8 @@ mod execute {
 
     /// Instantiate the cw721-ica extension contract using the instantiate2 pattern.
     /// Returns the instantiate2 message and the contract address.
+    ///
+    /// This is ignored since injective doesn't seem to support instantiate2.
     fn instantiate2_cw_ica_controller(
         api: &dyn Api,
         querier: QuerierWrapper,
@@ -259,6 +300,31 @@ mod execute {
         let label = format!("cw-ica-controller-{}", env.block.height);
 
         utils::instantiate2_contract(api, querier, env, code_id, salt, label, instantiate_msg)
+    }
+
+    /// Instantiate the cw721-ica-extension contract using the submessage pattern.
+    /// Returns the instantiate submessage whose reply will contain the new contract address.
+    pub fn instantiate_cw_ica_controller(
+        env: Env,
+        code_id: u64,
+        channel_open_init_options: Option<ChannelOpenInitOptions>,
+    ) -> Result<SubMsg, ContractError> {
+        let instantiate_msg = WasmMsg::Instantiate {
+            admin: Some(env.contract.address.to_string()),
+            code_id,
+            msg: to_json_binary(&cw_ica_controller::types::msg::InstantiateMsg {
+                admin: Some(env.contract.address.to_string()),
+                channel_open_init_options,
+                send_callbacks_to: Some(env.contract.address.to_string()),
+            })?,
+            label: format!("cw-ica-controller-{}", env.block.height),
+            funds: vec![],
+        };
+
+        Ok(SubMsg::reply_on_success(
+            instantiate_msg,
+            CW_ICA_CONTROLLER_INSTANTIATE_REPLY_ID,
+        ))
     }
 }
 
@@ -282,6 +348,57 @@ mod query {
     /// Query the ICA controller address for a given ICA NFT ID.
     pub fn get_ica_address(deps: Deps, token_id: String) -> StdResult<String> {
         NFT_ICA_MAP.load(deps.storage, &token_id)
+    }
+}
+
+mod reply {
+    use cosmwasm_std::SubMsgResult;
+
+    use crate::types::state::REGISTERED_ICA_ADDRS;
+
+    use super::*;
+
+    pub fn cw721_instantiate(deps: DepsMut, msg: Reply) -> StdResult<Response> {
+        match msg.result {
+            SubMsgResult::Ok(reply) => {
+                let event = reply.events.iter().find(|e| e.ty == "instantiate").ok_or_else(|| StdError::generic_err("instantiate event not found"))?;
+                let maybe_address = &event.attributes.iter().find(|a| a.key == "_contract_address").ok_or_else(|| StdError::generic_err("contract_address attribute not found"))?.value;
+
+                let addr = deps.api.addr_validate(maybe_address)?;
+
+                // let addr = deps.api.addr_validate(&String::from_utf8(
+                //     reply
+                //         .data
+                //         .ok_or_else(|| StdError::generic_err("address not found in response"))?
+                //         .0,
+                // )?)?;
+
+                STATE.update(deps.storage, |mut cs| -> StdResult<_> {
+                    cs.cw721_ica_extension_address = addr;
+                    Ok(cs)
+                })?;
+
+                Ok(Response::new())
+            }
+            SubMsgResult::Err(err) => Err(StdError::generic_err(err)),
+        }
+    }
+
+    pub fn cw_ica_controller_instantiate(deps: DepsMut, msg: Reply) -> StdResult<Response> {
+        match msg.result {
+            SubMsgResult::Ok(reply) => {
+                let event = reply.events.iter().find(|e| e.ty == "instantiate").ok_or_else(|| StdError::generic_err("instantiate event not found"))?;
+                let maybe_address = &event.attributes.iter().find(|a| a.key == "_contract_address").ok_or_else(|| StdError::generic_err("contract_address attribute not found"))?.value;
+
+                let addr = deps.api.addr_validate(maybe_address)?;
+
+                REGISTERED_ICA_ADDRS.insert(deps.storage, &addr)?;
+
+                // Save res.contract_address
+                Ok(Response::new())
+            }
+            SubMsgResult::Err(err) => Err(StdError::generic_err(err)),
+        }
     }
 }
 
