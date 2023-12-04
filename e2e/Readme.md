@@ -12,11 +12,11 @@ The end to end tests are currently split into two parts:
 
 These tests are designed to test the ICA contract itself and its interaction with the relayer.
 
-All contract tests are located in `interchaintest/contract_test.go` file. Currently, there are four tests in this file:
+All contract tests are located in `interchaintest/contract_test.go` file. Currently, there is only one test in this file:
 
 - `TestMintAndExecute`
 
-(These three tests used to be one monolithic test, but they were split into three in order to run them in parallel in the CI.)
+<!-- (These three tests used to be one monolithic test, but they were split into three in order to run them in parallel in the CI.) -->
 
 To run the tests locally, run the following commands from this directory:
 
