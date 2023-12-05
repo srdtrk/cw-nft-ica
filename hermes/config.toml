@@ -182,7 +182,10 @@ grpc_addr = 'https://k8s.testnet.chain.grpc.injective.network:443'
 #    the `message` attribute. Without this attribute, the WebSocket is not able to catch these
 #    events, so the `/block_results` RPC must be used instead.
 #
-event_source = { mode = 'push', url = 'wss://k8s.testnet.chain.grpc.injective.network:443/websocket', batch_delay = '500ms' }
+
+# event_source = { mode = 'push', url = 'ws://k8s.testnet.chain.grpc.injective.network:26657/websocket', batch_delay = '500ms' }
+
+event_source = { mode = 'pull', interval = '800ms' }
 
 # Specify the maximum amount of time (duration) that the RPC requests should
 # take before timing out. Default: 10s (10 seconds)
@@ -253,12 +256,12 @@ store_prefix = 'ibc'
 # Specify the default amount of gas to be used in case the tx simulation fails,
 # and Hermes cannot estimate the amount of gas needed.
 # Default: 100 000
-default_gas = 100000
+default_gas = 4000000
 
 # Specify the maximum amount of gas to be used as the gas limit for a transaction.
 # If `default_gas` is unspecified, then `max_gas` will be used as `default_gas`.
 # Default: 400 000
-max_gas = 400000
+max_gas = 900000000
 
 # Specify the price per gas used of the fee to submit a transaction and
 # the denomination of the fee. 
@@ -268,7 +271,7 @@ max_gas = 400000
 # paid for each unit of gas per transaction.
 # 
 # Required
-gas_price = { price = 0.025, denom = 'inj' }
+gas_price = { price = 700000000, denom = 'inj' }
 
 # Multiply this amount with the gas estimate, used to compute the fee
 # and account for potential estimation error.
@@ -283,7 +286,7 @@ gas_price = { price = 0.025, denom = 'inj' }
 #
 # Default: 1.1, ie. the gas is increased by 10%
 # Minimum value: 1.0
-gas_multiplier = 1.1
+gas_multiplier = 1.3
 
 # Specify how many IBC messages at most to include in a single transaction.
 # Default: 30
@@ -324,7 +327,7 @@ trust_threshold = { numerator = '2', denominator = '3' }
 # to this chain. The string is limited to 50 characters. Default: '' (empty).
 # Note: Hermes will append to the string defined here additional
 # operational debugging information, e.g., relayer build version.
-memo_prefix = ''
+memo_prefix = 'relayed by @srdtrk'
 
 # This section specifies the filters for policy based relaying.
 #
@@ -394,7 +397,8 @@ memo_prefix = ''
 id = 'theta-testnet-001'
 rpc_addr = 'https://rpc.sentry-01.theta-testnet.polypore.xyz:443'
 grpc_addr = 'https://grpc.sentry-01.theta-testnet.polypore.xyz:443'
-event_source = { mode = 'push', url = 'https://grpc.sentry-01.theta-testnet.polypore.xyz:443/websocket', batch_delay = '500ms' }
+event_source = { mode = 'push', url = 'ws://rpc.sentry-01.theta-testnet.polypore.xyz:26657/websocket', batch_delay = '500ms' }
+# event_source = { mode = 'pull', interval = '15s' }
 rpc_timeout = '10s'
 trusted_node = false
 account_prefix = 'cosmos'
