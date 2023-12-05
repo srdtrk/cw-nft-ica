@@ -3,7 +3,9 @@
 use cosmwasm_std::{entry_point, Addr, Reply, StdError};
 use cosmwasm_std::{to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 
-use crate::types::keys::{self, CW721_INSTANTIATE_REPLY_ID, CW_ICA_CONTROLLER_INSTANTIATE_REPLY_ID};
+use crate::types::keys::{
+    self, CW721_INSTANTIATE_REPLY_ID, CW_ICA_CONTROLLER_INSTANTIATE_REPLY_ID,
+};
 use crate::types::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
 use crate::types::state::{ContractState, STATE};
 use crate::types::ContractError;
@@ -137,7 +139,7 @@ mod instantiate {
 mod execute {
     use super::*;
 
-    use cosmwasm_std::{Addr, Api, CosmosMsg, QuerierWrapper, WasmMsg, SubMsg};
+    use cosmwasm_std::{Addr, Api, CosmosMsg, QuerierWrapper, SubMsg, WasmMsg};
     use cw721_ica_extension::{helpers::new_cw721_ica_extension_helper, Extension};
     use cw_ica_controller::{
         helpers::CwIcaControllerContract,
@@ -148,10 +150,13 @@ mod execute {
     };
 
     use crate::{
-        types::{state::{
-            QueueItem, NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP, NFT_MINT_QUEUE, REGISTERED_ICA_ADDRS,
-            TOKEN_COUNTER,
-        }, keys::CW_ICA_CONTROLLER_INSTANTIATE_REPLY_ID},
+        types::{
+            keys::CW_ICA_CONTROLLER_INSTANTIATE_REPLY_ID,
+            state::{
+                QueueItem, NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP, NFT_MINT_QUEUE,
+                REGISTERED_ICA_ADDRS, TOKEN_COUNTER,
+            },
+        },
         utils,
     };
 
@@ -361,17 +366,24 @@ mod reply {
     pub fn cw721_instantiate(deps: DepsMut, msg: Reply) -> StdResult<Response> {
         match msg.result {
             SubMsgResult::Ok(reply) => {
-                let event = reply.events.iter().find(|e| e.ty == "instantiate").ok_or_else(|| StdError::generic_err("instantiate event not found"))?;
-                let maybe_address = &event.attributes.iter().find(|a| a.key == "_contract_address").ok_or_else(|| StdError::generic_err("contract_address attribute not found"))?.value;
+                let event = reply
+                    .events
+                    .iter()
+                    .find(|e| {
+                        e.ty == "instantiate"
+                            || e.ty == "cosmwasm.wasm.v1.EventContractInstantiated"
+                    })
+                    .ok_or_else(|| StdError::generic_err("instantiate event not found"))?;
+                let maybe_address = &event
+                    .attributes
+                    .iter()
+                    .find(|a| a.key == "_contract_address" || a.key == "contract_address")
+                    .ok_or_else(|| StdError::generic_err("contract_address attribute not found"))?
+                    .value;
 
-                let addr = deps.api.addr_validate(maybe_address)?;
-
-                // let addr = deps.api.addr_validate(&String::from_utf8(
-                //     reply
-                //         .data
-                //         .ok_or_else(|| StdError::generic_err("address not found in response"))?
-                //         .0,
-                // )?)?;
+                // Stopped validating the address since it's not supported by injective.
+                // let addr = deps.api.addr_validate(maybe_address)?;
+                let addr = Addr::unchecked(maybe_address);
 
                 STATE.update(deps.storage, |mut cs| -> StdResult<_> {
                     cs.cw721_ica_extension_address = addr;
@@ -387,10 +399,24 @@ mod reply {
     pub fn cw_ica_controller_instantiate(deps: DepsMut, msg: Reply) -> StdResult<Response> {
         match msg.result {
             SubMsgResult::Ok(reply) => {
-                let event = reply.events.iter().find(|e| e.ty == "instantiate").ok_or_else(|| StdError::generic_err("instantiate event not found"))?;
-                let maybe_address = &event.attributes.iter().find(|a| a.key == "_contract_address").ok_or_else(|| StdError::generic_err("contract_address attribute not found"))?.value;
+                let event = reply
+                    .events
+                    .iter()
+                    .find(|e| {
+                        e.ty == "instantiate"
+                            || e.ty == "cosmwasm.wasm.v1.EventContractInstantiated"
+                    })
+                    .ok_or_else(|| StdError::generic_err("instantiate event not found"))?;
+                let maybe_address = &event
+                    .attributes
+                    .iter()
+                    .find(|a| a.key == "_contract_address" || a.key == "contract_address")
+                    .ok_or_else(|| StdError::generic_err("contract_address attribute not found"))?
+                    .value;
 
-                let addr = deps.api.addr_validate(maybe_address)?;
+                // Stopped validating the address since it's not supported by injective.
+                // let addr = deps.api.addr_validate(maybe_address)?;
+                let addr = Addr::unchecked(maybe_address);
 
                 REGISTERED_ICA_ADDRS.insert(deps.storage, &addr)?;
 
