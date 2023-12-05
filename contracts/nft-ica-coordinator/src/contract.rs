@@ -382,7 +382,13 @@ mod reply {
                     .value;
 
                 // added this to remove the quotes from the address in injective
-                let addr = deps.api.addr_validate(maybe_address.chars().filter(|c| c.is_alphanumeric()).collect::<String>().as_str())?;
+                let addr = deps.api.addr_validate(
+                    maybe_address
+                        .chars()
+                        .filter(|c| c.is_alphanumeric())
+                        .collect::<String>()
+                        .as_str(),
+                )?;
 
                 STATE.update(deps.storage, |mut cs| -> StdResult<_> {
                     cs.cw721_ica_extension_address = addr;
@@ -414,7 +420,13 @@ mod reply {
                     .value;
 
                 // added this to remove the quotes from the address in injective
-                let addr = deps.api.addr_validate(maybe_address.chars().filter(|c| c.is_alphanumeric()).collect::<String>().as_str())?;
+                let addr = deps.api.addr_validate(
+                    maybe_address
+                        .chars()
+                        .filter(|c| c.is_alphanumeric())
+                        .collect::<String>()
+                        .as_str(),
+                )?;
 
                 REGISTERED_ICA_ADDRS.insert(deps.storage, &addr)?;
 
