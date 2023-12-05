@@ -381,9 +381,8 @@ mod reply {
                     .ok_or_else(|| StdError::generic_err("contract_address attribute not found"))?
                     .value;
 
-                // Stopped validating the address since it's not supported by injective.
-                // let addr = deps.api.addr_validate(maybe_address)?;
-                let addr = Addr::unchecked(maybe_address);
+                // added this to remove the quotes from the address in injective
+                let addr = deps.api.addr_validate(maybe_address.chars().filter(|c| c.is_alphanumeric()).collect::<String>().as_str())?;
 
                 STATE.update(deps.storage, |mut cs| -> StdResult<_> {
                     cs.cw721_ica_extension_address = addr;
@@ -414,9 +413,8 @@ mod reply {
                     .ok_or_else(|| StdError::generic_err("contract_address attribute not found"))?
                     .value;
 
-                // Stopped validating the address since it's not supported by injective.
-                // let addr = deps.api.addr_validate(maybe_address)?;
-                let addr = Addr::unchecked(maybe_address);
+                // added this to remove the quotes from the address in injective
+                let addr = deps.api.addr_validate(maybe_address.chars().filter(|c| c.is_alphanumeric()).collect::<String>().as_str())?;
 
                 REGISTERED_ICA_ADDRS.insert(deps.storage, &addr)?;
 

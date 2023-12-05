@@ -14,15 +14,28 @@ This repository wraps the cw721-base contract with an extension that allows stor
 
 CodeId (Injective Testnet): `4457`
 
-Contract Address: `inj1wsvc09g2lmhwv2tg97jnjq545puhs5m0ak0p73` (deployed nft-ica-coordinator)
+Contract Address: `inj12xkc2ga54a6x02cdn0r5z8eyymy32fq330u788` (deployed nft-ica-coordinator)
 
 ### NFT ICA Coordinator
 
 This contract associates each NFT in a collection with an interchain account (ICA) using the [cw-ica-controller](https://github.com/srdtrk/cw-ica-controller/) contract.
 
-CodeId (Injective Testnet): `4458`
+CodeId (Injective Testnet): `4568`
 
-Contract Address: `inj1clt4czjmhdejvm6y9jnzqsjplvdnr0vspht2u8` (deployed by my test wallet)
+Contract Address: `inj1vtjjg7z2t5wspsa445w68xlf430eusw7ncyg3r` (deployed by my test wallet)
+
+Instantiate Message:
+
+```json
+{
+	"ica_controller_code_id":4459,
+	"cw721_ica_extension_code_id":4457,
+	"default_chan_init_options": {
+		"connection_id": "connection-184",
+		"counterparty_connection_id": "connection-2963"
+	}
+}
+```
 
 ### CosmWasm ICA Controller (`v0.2.0`)
 
