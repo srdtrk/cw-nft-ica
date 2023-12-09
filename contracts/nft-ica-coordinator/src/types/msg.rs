@@ -66,10 +66,37 @@ pub enum QueryMsg {
         /// The token ID or ICA address to query.
         key: String,
     },
-    /// GetIcaControllerAddress returns the ICA controller address for the given ICA NFT.
+    /// GetIcaAddress returns the ICA controller address for the given ICA NFT ID.
     #[returns(String)]
     GetIcaAddress {
         /// The token ID of the ICA NFT.
         token_id: String,
     },
+    /// GetIcaAddresses returns the ICA controller addresses for the given ICA NFT IDs.
+    #[returns(query_responses::GetIcaAddressesResponse)]
+    GetIcaAddresses {
+        /// The token IDs of the ICA NFTs.
+        token_ids: Vec<String>,
+    },
+}
+
+/// This module contains some of the query responses.
+pub mod query_responses {
+    use super::cw_serde;
+
+    /// GetIcaAddressesResponse is the response for the [`super::QueryMsg::GetIcaAddresses`] query.
+    #[cw_serde]
+    pub struct GetIcaAddressesResponse {
+        /// The list of NFT ID and ICA controller address pairs.
+        pub pairs: Vec<NftIcaPair>,
+    }
+
+    #[cw_serde]
+    /// NftIcaPair is a pair of NFT ID and ICA controller address.
+    pub struct NftIcaPair {
+        /// The token ID of the ICA NFT.
+        pub nft_id: String,
+        /// The ICA controller address.
+        pub ica_address: String,
+    }
 }

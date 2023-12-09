@@ -69,6 +69,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::GetIcaAddress { token_id } => {
             to_json_binary(&query::get_ica_address(deps, token_id)?)
         }
+        QueryMsg::GetIcaAddresses { token_ids } => {
+            to_json_binary(&query::get_ica_addresses(deps, token_ids)?)
+        }
     }
 }
 
@@ -151,7 +154,7 @@ mod execute {
 
     use crate::{
         types::{
-            keys::CW_ICA_CONTROLLER_INSTANTIATE_REPLY_ID,
+            keys::{CW_ICA_CONTROLLER_INSTANTIATE_REPLY_ID, TOKEN_PREFIX},
             state::{
                 QueueItem, NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP, NFT_MINT_QUEUE,
                 REGISTERED_ICA_ADDRS, TOKEN_COUNTER,
@@ -187,23 +190,13 @@ mod execute {
         };
 
         NFT_MINT_QUEUE.push_front(deps.storage, &queue_item)?;
-
-        // let (cosmos_msg, contract_addr) = instantiate2_cw_ica_controller(
-        //     deps.api,
-        //     deps.querier,
-        //     env,
-        //     state.ica_controller_code_id,
-        //     salt,
-        //     Some(state.default_chan_init_options),
-        // )?;
+        TOKEN_COUNTER.save(deps.storage, &(ica_count + 1))?;
 
         let instantiate_submsg = instantiate_cw_ica_controller(
             env,
             state.ica_controller_code_id,
             Some(state.default_chan_init_options),
         )?;
-
-        // REGISTERED_ICA_ADDRS.insert(deps.storage, &contract_addr)?;
 
         Ok(Response::new().add_submessage(instantiate_submsg))
     }
@@ -336,7 +329,10 @@ mod execute {
 mod query {
     use super::*;
 
-    use crate::types::state::{NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP};
+    use crate::types::{
+        msg::query_responses::{GetIcaAddressesResponse, NftIcaPair},
+        state::{NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP},
+    };
 
     use cosmwasm_std::StdResult;
 
@@ -353,6 +349,28 @@ mod query {
     /// Query the ICA controller address for a given ICA NFT ID.
     pub fn get_ica_address(deps: Deps, token_id: String) -> StdResult<String> {
         NFT_ICA_MAP.load(deps.storage, &token_id)
+    }
+
+    /// Query the ICA controller addresses for a given list of ICA NFT IDs.
+    pub fn get_ica_addresses(
+        deps: Deps,
+        token_ids: Vec<String>,
+    ) -> StdResult<GetIcaAddressesResponse> {
+        let nft_ica_pairs =
+            token_ids
+                .iter()
+                .try_fold(Vec::new(), |mut acc, token_id| -> StdResult<_> {
+                    let ica_address = NFT_ICA_MAP.load(deps.storage, token_id)?;
+                    acc.push(NftIcaPair {
+                        nft_id: token_id.to_string(),
+                        ica_address,
+                    });
+                    Ok(acc)
+                })?;
+
+        Ok(GetIcaAddressesResponse {
+            pairs: nft_ica_pairs,
+        })
     }
 }
 
