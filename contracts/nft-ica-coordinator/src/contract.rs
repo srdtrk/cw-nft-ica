@@ -72,6 +72,7 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         QueryMsg::GetIcaAddresses { token_ids } => {
             to_json_binary(&query::get_ica_addresses(deps, token_ids)?)
         }
+        QueryMsg::GetMintQueue {} => to_json_binary(&query::get_mint_queue(deps)?),
     }
 }
 
@@ -331,7 +332,7 @@ mod query {
 
     use crate::types::{
         msg::query_responses::{GetIcaAddressesResponse, NftIcaPair},
-        state::{NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP},
+        state::{NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP, NFT_MINT_QUEUE, QueueItem},
     };
 
     use cosmwasm_std::StdResult;
@@ -371,6 +372,11 @@ mod query {
         Ok(GetIcaAddressesResponse {
             pairs: nft_ica_pairs,
         })
+    }
+
+    /// Query the mint queue.
+    pub fn get_mint_queue(deps: Deps) -> StdResult<Vec<QueueItem>> {
+        NFT_MINT_QUEUE.iter(deps.storage)?.collect()
     }
 }
 

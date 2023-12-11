@@ -8,6 +8,8 @@ use cw_ica_controller::types::{
     msg::{options::ChannelOpenInitOptions, ExecuteMsg as IcaControllerExecuteMsg},
 };
 
+use super::state::QueueItem;
+
 /// This is the instantiation message for the contract.
 #[cw_serde]
 pub struct InstantiateMsg {
@@ -78,6 +80,9 @@ pub enum QueryMsg {
         /// The token IDs of the ICA NFTs.
         token_ids: Vec<String>,
     },
+    /// GetMintQueue returns the mint queue.
+    #[returns(Vec<QueueItem>)]
+    GetMintQueue {},
 }
 
 /// This module contains some of the query responses.
