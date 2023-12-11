@@ -235,13 +235,13 @@ dependencies = [
 
 [[package]]
 name = "cw-ica-controller"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83994aa638a9943eb0eca4fd82a21d9261c61763b609f2685a5fb01dff24aaa4"
+version = "0.3.0"
+source = "git+https://github.com/srdtrk/cw-ica-controller.git?rev=7150af52#7150af52102d7faa5b7324de92fd2aef21355a85"
 dependencies = [
  "cosmos-sdk-proto",
  "cosmwasm-schema",
  "cosmwasm-std",
+ "cw-ownable",
  "cw-storage-plus 1.2.0",
  "cw2 1.1.1",
  "schemars",

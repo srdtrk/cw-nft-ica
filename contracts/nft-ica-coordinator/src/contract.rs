@@ -155,7 +155,7 @@ mod execute {
 
     use crate::{
         types::{
-            keys::{CW_ICA_CONTROLLER_INSTANTIATE_REPLY_ID, TOKEN_PREFIX},
+            keys::CW_ICA_CONTROLLER_INSTANTIATE_REPLY_ID,
             state::{
                 QueueItem, NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP, NFT_MINT_QUEUE,
                 REGISTERED_ICA_ADDRS, TOKEN_COUNTER,
@@ -291,7 +291,7 @@ mod execute {
         channel_open_init_options: Option<ChannelOpenInitOptions>,
     ) -> Result<(CosmosMsg, Addr), ContractError> {
         let instantiate_msg = to_json_binary(&cw_ica_controller::types::msg::InstantiateMsg {
-            admin: Some(env.contract.address.to_string()),
+            owner: Some(env.contract.address.to_string()),
             channel_open_init_options,
             send_callbacks_to: Some(env.contract.address.to_string()),
         })?;
@@ -312,7 +312,7 @@ mod execute {
             admin: Some(env.contract.address.to_string()),
             code_id,
             msg: to_json_binary(&cw_ica_controller::types::msg::InstantiateMsg {
-                admin: Some(env.contract.address.to_string()),
+                owner: Some(env.contract.address.to_string()),
                 channel_open_init_options,
                 send_callbacks_to: Some(env.contract.address.to_string()),
             })?,
@@ -332,7 +332,7 @@ mod query {
 
     use crate::types::{
         msg::query_responses::{GetIcaAddressesResponse, NftIcaPair},
-        state::{NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP, NFT_MINT_QUEUE, QueueItem},
+        state::{QueueItem, NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP, NFT_MINT_QUEUE},
     };
 
     use cosmwasm_std::StdResult;

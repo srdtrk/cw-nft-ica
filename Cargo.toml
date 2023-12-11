@@ -36,7 +36,7 @@ cw2 = "1.1.1"
 schemars = "0.8.15"
 serde = { version = "1.0.189", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.49" }
-cw-ica-controller = { version = "0.2.0", default-features = false }
+cw-ica-controller = { git = "https://github.com/srdtrk/cw-ica-controller.git", rev = "7150af52", default-features = false }
 cw-ownable = "0.5.1"
 cw721 = "0.18.0"
 cw721-base = { version = "0.18.0", features = ["library"] }
