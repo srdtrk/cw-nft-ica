@@ -22,6 +22,14 @@ pub const NFT_MINT_QUEUE: Deque<mint::QueueItem> = Deque::new("nft_mint_queue");
 /// The item used to store the NFT-ICA counter.
 pub const TOKEN_COUNTER: Item<u64> = Item::new("ica_nft_counter");
 
+/// The prefix used to store the transaction history.
+const TX_HISTORY_PREFIX: &str = "tx_history_";
+
+/// Returns the key used to store the transaction history of the given token ID.
+pub fn get_tx_history_prefix(token_id: &str) -> String {
+    format!("{}{}", TX_HISTORY_PREFIX, token_id)
+}
+
 mod contract {
     use super::*;
 
@@ -50,5 +58,126 @@ mod mint {
         pub token_id: String,
         /// The owner of the NFT.
         pub owner: String,
+    }
+}
+
+/// This module contains the types used to store the ICA transaction history.
+pub mod history {
+    use super::*;
+    use cosmwasm_std::{CosmosMsg, StakingMsg};
+    use cw_ica_controller::types::msg::ExecuteMsg as IcaControllerExecuteMsg;
+
+    /// Represents the status of a transaction.
+    #[cw_serde]
+    pub enum TransactionStatus {
+        /// The transaction is waiting for a callback from the ICA controller contract.
+        Pending,
+        /// The transaction has been completed.
+        Completed,
+        /// The transaction has failed.
+        Failed,
+        /// The transaction has timed out.
+        Timeout,
+    }
+
+    /// Represents the type of a transaction message.
+    #[cw_serde]
+    pub enum TransactionMsgType {
+        /// The transaction is empty.
+        Empty,
+        /// The transaction is a custom message.
+        Custom,
+        /// The transaction is a [`CosmosMsg::Bank`] message.
+        Send,
+        /// The transaction is a [`CosmosMsg::Ibc`] message.
+        Ibc,
+        /// The transaction is a [`CosmosMsg::Gov`] message.
+        Vote,
+        /// The transaction is a [`CosmosMsg::Wasm`] message.
+        Wasm,
+        /// The transaction is a [`StakingMsg::Delegate`] message.
+        Delegate,
+        /// The transaction is a [`StakingMsg::Undelegate`] message.
+        Undelegate,
+        /// The transaction is a [`StakingMsg::Redelegate`] message.
+        Redelegate,
+        /// The transaction is a [`CosmosMsg::Stargate`] message.
+        Stargate,
+        /// The transaction is a [`CosmosMsg::Distribution`] message.
+        Distribution,
+        /// The transaction has more than one message.
+        MultiMsg,
+        /// The transaction type cannot be determined.
+        Unknown,
+    }
+
+    /// Represents a transaction record.
+    #[cw_serde]
+    pub struct TransactionRecord {
+        /// The status of the transaction.
+        pub status: TransactionStatus,
+        /// The token ID of the NFT.
+        pub token_id: String,
+        /// The owner of the NFT.
+        pub owner: String,
+        /// The type of the message sent to the ICA controller contract.
+        pub msg_type: TransactionMsgType,
+        /// The height of the block when the transaction was sent.
+        pub block_height: u64,
+        /// The timestamp of the block when the transaction was sent in nanoseconds.
+        pub timestamp: u64,
+    }
+
+    impl TransactionMsgType {
+        /// Returns the [`TransactionMsgType`] of the given [`CosmosMsg`].
+        pub const fn from_cosmos_msg(msg: &CosmosMsg) -> Self {
+            match msg {
+                CosmosMsg::Custom(_) => Self::Custom,
+                CosmosMsg::Stargate { .. } => Self::Stargate,
+                CosmosMsg::Bank(_) => Self::Send,
+                CosmosMsg::Staking(StakingMsg::Delegate { .. }) => Self::Delegate,
+                CosmosMsg::Staking(StakingMsg::Undelegate { .. }) => Self::Undelegate,
+                CosmosMsg::Staking(StakingMsg::Redelegate { .. }) => Self::Redelegate,
+                CosmosMsg::Distribution(_) => Self::Distribution,
+                CosmosMsg::Gov(_) => Self::Vote,
+                CosmosMsg::Wasm(_) => Self::Wasm,
+                CosmosMsg::Ibc(_) => Self::Ibc,
+                _ => Self::Unknown,
+            }
+        }
+    }
+
+    impl TransactionRecord {
+        /// Creates a new [`TransactionRecord`] from the given [`IcaControllerExecuteMsg`].
+        pub fn from_ica_msg(
+            msg: &IcaControllerExecuteMsg,
+            token_id: impl Into<String>,
+            owner: impl Into<String>,
+            block_height: u64,
+            timestamp: u64,
+        ) -> Option<Self> {
+            let msg_type = match msg {
+                IcaControllerExecuteMsg::SendCosmosMsgs { messages, .. } => {
+                    if messages.is_empty() {
+                        TransactionMsgType::Empty
+                    } else if messages.len() == 1 {
+                        TransactionMsgType::from_cosmos_msg(&messages[0])
+                    } else {
+                        TransactionMsgType::MultiMsg
+                    }
+                }
+                IcaControllerExecuteMsg::SendCustomIcaMessages { .. } => TransactionMsgType::Custom,
+                _ => return None,
+            };
+
+            Some(Self {
+                status: TransactionStatus::Pending,
+                token_id: token_id.into(),
+                owner: owner.into(),
+                msg_type,
+                block_height,
+                timestamp,
+            })
+        }
     }
 }

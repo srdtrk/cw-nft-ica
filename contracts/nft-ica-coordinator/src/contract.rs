@@ -53,7 +53,9 @@ pub fn execute(
             execute::receive_ica_callback(deps, info, callback)
         }
         ExecuteMsg::MintIca { salt } => execute::mint_ica(deps, env, info, salt),
-        ExecuteMsg::ExecuteIcaMsg { token_id, msg } => execute::ica_msg(deps, info, token_id, msg),
+        ExecuteMsg::ExecuteIcaMsg { token_id, msg } => {
+            execute::ica_msg(deps, env, info, token_id, msg)
+        }
     }
 }
 
@@ -73,6 +75,13 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
             to_json_binary(&query::get_ica_addresses(deps, token_ids)?)
         }
         QueryMsg::GetMintQueue {} => to_json_binary(&query::get_mint_queue(deps)?),
+        QueryMsg::GetTransactionHistory {
+            token_id,
+            page,
+            page_size,
+        } => to_json_binary(&query::get_transaction_history(
+            deps, token_id, page, page_size,
+        )?),
     }
 }
 
@@ -147,16 +156,20 @@ mod execute {
     use cw721_ica_extension::{helpers::new_cw721_ica_extension_helper, Extension};
     use cw_ica_controller::{
         helpers::CwIcaControllerContract,
+        ibc::types::packet::acknowledgement::Data,
         types::{
             callbacks::IcaControllerCallbackMsg,
             msg::{options::ChannelOpenInitOptions, ExecuteMsg as IcaControllerExecuteMsg},
         },
     };
+    use cw_storage_plus::Deque;
 
     use crate::{
         types::{
             keys::CW_ICA_CONTROLLER_INSTANTIATE_REPLY_ID,
             state::{
+                get_tx_history_prefix,
+                history::{TransactionRecord, TransactionStatus},
                 QueueItem, NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP, NFT_MINT_QUEUE,
                 REGISTERED_ICA_ADDRS, TOKEN_COUNTER,
             },
@@ -243,13 +256,58 @@ mod execute {
 
                 Ok(Response::new().add_message(cosmos_msg))
             }
-            _ => Ok(Response::new()),
+            IcaControllerCallbackMsg::OnAcknowledgementPacketCallback {
+                original_packet,
+                ica_acknowledgement,
+                ..
+            } => {
+                let maybe_controller = original_packet
+                    .src
+                    .port_id
+                    .strip_prefix(keys::WASM_IBC_PORT_PREFIX);
+                if let Some(controller_addr) = maybe_controller {
+                    let token_id = NFT_ICA_CONTRACT_BI_MAP.load(deps.storage, controller_addr)?;
+                    let prefix = get_tx_history_prefix(&token_id);
+                    let records_store: Deque<TransactionRecord> = Deque::new(&prefix);
+                    let mut record = records_store
+                        .pop_front(deps.storage)?
+                        .ok_or(ContractError::QueueEmpty)?;
+                    record.status = match ica_acknowledgement {
+                        Data::Result(_) => TransactionStatus::Completed,
+                        Data::Error(_) => TransactionStatus::Failed,
+                    };
+                    records_store.push_front(deps.storage, &record)?;
+                }
+
+                Ok(Response::default())
+            }
+            IcaControllerCallbackMsg::OnTimeoutPacketCallback {
+                original_packet, ..
+            } => {
+                let maybe_controller = original_packet
+                    .src
+                    .port_id
+                    .strip_prefix(keys::WASM_IBC_PORT_PREFIX);
+                if let Some(controller_addr) = maybe_controller {
+                    let token_id = NFT_ICA_CONTRACT_BI_MAP.load(deps.storage, controller_addr)?;
+                    let prefix = get_tx_history_prefix(&token_id);
+                    let records_store: Deque<TransactionRecord> = Deque::new(&prefix);
+                    let mut record = records_store
+                        .pop_front(deps.storage)?
+                        .ok_or(ContractError::QueueEmpty)?;
+                    record.status = TransactionStatus::Timeout;
+                    records_store.push_front(deps.storage, &record)?;
+                }
+
+                Ok(Response::default())
+            }
         }
     }
 
     /// Execute a message on the ICA contract if the sender is the owner of the ica token.
     pub fn ica_msg(
         deps: DepsMut,
+        env: Env,
         info: MessageInfo,
         token_id: String,
         msg: IcaControllerExecuteMsg,
@@ -271,6 +329,18 @@ mod execute {
         if !REGISTERED_ICA_ADDRS.has(deps.storage, &ica_address) {
             return Err(ContractError::Unauthorized);
         };
+
+        if let Some(tx_record) = TransactionRecord::from_ica_msg(
+            &msg,
+            &token_id,
+            owner,
+            env.block.height,
+            env.block.time.nanos(),
+        ) {
+            let prefix = get_tx_history_prefix(&token_id);
+            let records_store: Deque<TransactionRecord> = Deque::new(&prefix);
+            records_store.push_front(deps.storage, &tx_record)?;
+        }
 
         let cw_ica_controller = CwIcaControllerContract::new(ica_address);
         let cosmos_msg = cw_ica_controller.call(msg)?;
@@ -332,10 +402,14 @@ mod query {
 
     use crate::types::{
         msg::query_responses::{GetIcaAddressesResponse, NftIcaPair},
-        state::{QueueItem, NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP, NFT_MINT_QUEUE},
+        state::{
+            get_tx_history_prefix, history::TransactionRecord, QueueItem, NFT_ICA_CONTRACT_BI_MAP,
+            NFT_ICA_MAP, NFT_MINT_QUEUE,
+        },
     };
 
     use cosmwasm_std::StdResult;
+    use cw_storage_plus::Deque;
 
     /// Query the contract state.
     pub fn state(deps: Deps) -> StdResult<ContractState> {
@@ -377,6 +451,33 @@ mod query {
     /// Query the mint queue.
     pub fn get_mint_queue(deps: Deps) -> StdResult<Vec<QueueItem>> {
         NFT_MINT_QUEUE.iter(deps.storage)?.collect()
+    }
+
+    /// Query the transaction history for a given NFT ID.
+    pub fn get_transaction_history(
+        deps: Deps,
+        token_id: String,
+        page: Option<u32>,
+        page_size: Option<u32>,
+    ) -> StdResult<Vec<TransactionRecord>> {
+        let page = page.unwrap_or(0);
+        // using 30 as the default page size
+        let page_size = page_size.unwrap_or(30);
+
+        let start = (page * page_size) as usize;
+        let end = start + page_size as usize;
+
+        let prefix = get_tx_history_prefix(&token_id);
+        let records_store: Deque<TransactionRecord> = Deque::new(&prefix);
+
+        records_store
+            .iter(deps.storage)?
+            .skip(start)
+            .take(end)
+            .try_fold(Vec::new(), |mut acc, maybe_record| -> StdResult<_> {
+                acc.push(maybe_record?);
+                Ok(acc)
+            })
     }
 }
 
