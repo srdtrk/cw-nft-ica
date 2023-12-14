@@ -8,7 +8,7 @@ use cw_ica_controller::types::{
     msg::{options::ChannelOpenInitOptions, ExecuteMsg as IcaControllerExecuteMsg},
 };
 
-use super::state::{history::TransactionRecord, QueueItem};
+use super::state::QueueItem;
 
 /// This is the instantiation message for the contract.
 #[cw_serde]
@@ -84,7 +84,7 @@ pub enum QueryMsg {
     #[returns(Vec<QueueItem>)]
     GetMintQueue {},
     /// GetTransactionHistory returns the transaction history for the given ICA NFT ID.
-    #[returns(Vec<TransactionRecord>)]
+    #[returns(query_responses::GetTransactionHistoryResponse)]
     GetTransactionHistory {
         /// The token ID of the ICA NFT.
         token_id: String,
@@ -97,7 +97,18 @@ pub enum QueryMsg {
 
 /// This module contains some of the query responses.
 pub mod query_responses {
+    use crate::types::state::history::TransactionRecord;
+
     use super::cw_serde;
+
+    #[cw_serde]
+    /// GetTransactionHistoryResponse is the response for the [`super::QueryMsg::GetTransactionHistory`] query.
+    pub struct GetTransactionHistoryResponse {
+        /// The transaction history.
+        pub records: Vec<TransactionRecord>,
+        /// The total number of transactions.
+        pub total: u32,
+    }
 
     /// GetIcaAddressesResponse is the response for the [`super::QueryMsg::GetIcaAddresses`] query.
     #[cw_serde]

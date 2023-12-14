@@ -401,7 +401,9 @@ mod query {
     use super::*;
 
     use crate::types::{
-        msg::query_responses::{GetIcaAddressesResponse, NftIcaPair},
+        msg::query_responses::{
+            GetIcaAddressesResponse, GetTransactionHistoryResponse, NftIcaPair,
+        },
         state::{
             get_tx_history_prefix, history::TransactionRecord, QueueItem, NFT_ICA_CONTRACT_BI_MAP,
             NFT_ICA_MAP, NFT_MINT_QUEUE,
@@ -459,7 +461,7 @@ mod query {
         token_id: String,
         page: Option<u32>,
         page_size: Option<u32>,
-    ) -> StdResult<Vec<TransactionRecord>> {
+    ) -> StdResult<GetTransactionHistoryResponse> {
         let page = page.unwrap_or(0);
         // using 30 as the default page size
         let page_size = page_size.unwrap_or(30);
@@ -470,14 +472,19 @@ mod query {
         let prefix = get_tx_history_prefix(&token_id);
         let records_store: Deque<TransactionRecord> = Deque::new(&prefix);
 
-        records_store
+        let tx_records = records_store
             .iter(deps.storage)?
             .skip(start)
             .take(end)
             .try_fold(Vec::new(), |mut acc, maybe_record| -> StdResult<_> {
                 acc.push(maybe_record?);
                 Ok(acc)
-            })
+            });
+
+        Ok(GetTransactionHistoryResponse {
+            records: tx_records?,
+            total: records_store.len(deps.storage)?,
+        })
     }
 }
 
