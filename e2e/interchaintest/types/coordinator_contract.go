@@ -141,17 +141,17 @@ func (c *CoordinatorContract) QueryIcaAddress(ctx context.Context, tokenID strin
 	return ica, nil
 }
 
-// QueryChanelStatus queries the tokenID's channel status
-func (c *CoordinatorContract) QueryChannelStatus(ctx context.Context, tokenID string) (string, error) {
-	queryResp := QueryResponse[string]{}
-	err := c.chain.QueryContract(ctx, c.Address, newGetChannelStatusQueryMsg(tokenID), &queryResp)
+// QueryChanelState queries the tokenID's channel state
+func (c *CoordinatorContract) QueryChannelState(ctx context.Context, tokenID string) (ChannelState, error) {
+	queryResp := QueryResponse[ChannelState]{}
+	err := c.chain.QueryContract(ctx, c.Address, newGetChannelStateQueryMsg(tokenID), &queryResp)
 	if err != nil {
-		return "", err
+		return ChannelState{}, err
 	}
 
 	status, err := queryResp.GetResp()
 	if err != nil {
-		return "", err
+		return ChannelState{}, err
 	}
 
 	return status, nil

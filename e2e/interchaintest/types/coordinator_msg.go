@@ -152,9 +152,9 @@ func newGetIcaAddressQueryMsg(tokenID string) map[string]interface{} {
 	}
 }
 
-func newGetChannelStatusQueryMsg(tokenID string) map[string]interface{} {
+func newGetChannelStateQueryMsg(tokenID string) map[string]interface{} {
 	return map[string]interface{}{
-		"get_channel_status": map[string]interface{}{
+		"get_channel_state": map[string]interface{}{
 			"token_id": tokenID,
 		},
 	}

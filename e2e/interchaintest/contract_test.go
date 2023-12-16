@@ -79,11 +79,6 @@ func (s *ContractTestSuite) TestMintAndExecute() {
 		err = testutil.WaitForBlocks(ctx, 7, s.ChainA, s.ChainB)
 		s.Require().NoError(err)
 
-		// Check that the ICA channel was opened:
-		status, err := s.Contract.QueryChannelStatus(ctx, firstTokenID)
-		s.Require().NoError(err)
-		s.Require().Equal("open", status)
-
 		icaContractAddress, err := s.Contract.QueryNftIcaBimap(ctx, firstTokenID)
 		s.Require().NoError(err)
 
@@ -122,6 +117,12 @@ func (s *ContractTestSuite) TestMintAndExecute() {
 
 		s.Require().Equal(1, len(tokensResp.Tokens))
 		s.Require().Equal(firstTokenID, tokensResp.Tokens[0])
+
+		// Check that the ICA channel was opened:
+		tokenIcaState, err := s.Contract.QueryChannelState(ctx, firstTokenID)
+		s.Require().NoError(err)
+		s.Require().Equal("open", tokenIcaState.Status)
+		s.Require().Equal(wasmdChannel.ChannelID, *tokenIcaState.ChannelId)
 	})
 
 	s.Run("TestExecuteCustomIcaMsg", func() {
@@ -233,9 +234,9 @@ func (s *ContractTestSuite) TestTimeoutAndChannelReopen() {
 		s.Require().NoError(err)
 
 		// Check if the channel is closed:
-		status, err := s.Contract.QueryChannelStatus(ctx, firstTokenID)
+		tokenChanState, err := s.Contract.QueryChannelState(ctx, firstTokenID)
 		s.Require().NoError(err)
-		s.Require().Equal("closed", status)
+		s.Require().Equal("closed", tokenChanState.Status)
 	})
 
 	s.Run("TestChannelReopen", func() {
@@ -244,17 +245,19 @@ func (s *ContractTestSuite) TestTimeoutAndChannelReopen() {
 		)
 		s.Require().NoError(err)
 
-		status, err := s.Contract.QueryChannelStatus(ctx, firstTokenID)
+		tokenChanState, err := s.Contract.QueryChannelState(ctx, firstTokenID)
 		s.Require().NoError(err)
-		s.Require().Equal("pending", status)
+		s.Require().Equal("pending", tokenChanState.Status)
+		s.Require().Nil(tokenChanState.ChannelId)
 
 		// Wait until channel is reopened:
 		err = testutil.WaitForBlocks(ctx, 10, wasmd, simd)
 		s.Require().NoError(err)
 
-		status, err = s.Contract.QueryChannelStatus(ctx, firstTokenID)
+		tokenChanState, err = s.Contract.QueryChannelState(ctx, firstTokenID)
 		s.Require().NoError(err)
-		s.Require().Equal("open", status)
+		s.Require().Equal("open", tokenChanState.Status)
+		s.Require().NotNil(tokenChanState.ChannelId)
 	})
 }
 
