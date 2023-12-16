@@ -22,7 +22,7 @@ pub const NFT_MINT_QUEUE: Deque<mint::QueueItem> = Deque::new("nft_mint_queue");
 /// The item used to store the NFT-ICA counter.
 pub const TOKEN_COUNTER: Item<u64> = Item::new("ica_nft_counter");
 /// tha map used to store channel status for each token id
-pub const CHANNEL_STATUS: Map<&str, channel::ChannelStatus> = Map::new("channel_status");
+pub const CHANNEL_STATE: Map<&str, channel::ChannelState> = Map::new("channel_status");
 
 /// The prefix used to store the transaction history.
 const TX_HISTORY_PREFIX: &str = "tx_history_";
@@ -66,6 +66,15 @@ mod mint {
 /// This module contains the types used to store the ICA channel state.
 pub mod channel {
     use cosmwasm_schema::cw_serde;
+
+    /// ChannelState is the simplified channel state stored for each token.
+    #[cw_serde]
+    pub struct ChannelState {
+        /// The channel status.
+        pub status: ChannelStatus,
+        /// The channel ID. This is only set if the channel is not pending.
+        pub channel_id: Option<String>,
+    }
 
     /// The status of a channel.
     #[cw_serde]

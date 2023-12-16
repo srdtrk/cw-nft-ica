@@ -8,7 +8,7 @@ use cw_ica_controller::types::{
     msg::{options::ChannelOpenInitOptions, ExecuteMsg as IcaControllerExecuteMsg},
 };
 
-use super::state::channel::ChannelStatus;
+use super::state::channel::ChannelState;
 
 /// This is the instantiation message for the contract.
 #[cw_serde]
@@ -94,8 +94,8 @@ pub enum QueryMsg {
         page_size: Option<u32>,
     },
     /// GetChannelState returns the channel state for the given ICA NFT ID.
-    #[returns(ChannelStatus)]
-    GetChannelStatus {
+    #[returns(ChannelState)]
+    GetChannelState {
         /// The token ID of the ICA NFT.
         token_id: String,
     },
@@ -107,8 +107,8 @@ pub mod query_responses {
 
     use super::cw_serde;
 
-    #[cw_serde]
     /// GetTransactionHistoryResponse is the response for the [`super::QueryMsg::GetTransactionHistory`] query.
+    #[cw_serde]
     pub struct GetTransactionHistoryResponse {
         /// The transaction history.
         pub records: Vec<TransactionRecord>,
@@ -123,8 +123,8 @@ pub mod query_responses {
         pub pairs: Vec<NftIcaPair>,
     }
 
-    #[cw_serde]
     /// NftIcaPair is a pair of NFT ID and ICA controller address.
+    #[cw_serde]
     pub struct NftIcaPair {
         /// The token ID of the ICA NFT.
         pub nft_id: String,

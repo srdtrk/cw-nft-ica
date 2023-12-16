@@ -23,4 +23,7 @@ pub enum ContractError {
 
     #[error("Channel already open")]
     ChannelAlreadyOpen,
+
+    #[error("Channel state not found")]
+    ChannelStateNotFound,
 }

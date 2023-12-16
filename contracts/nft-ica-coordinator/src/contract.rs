@@ -82,8 +82,8 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         } => to_json_binary(&query::get_transaction_history(
             deps, token_id, page, page_size,
         )?),
-        QueryMsg::GetChannelStatus { token_id } => {
-            to_json_binary(&query::get_channel_status(deps, token_id)?)
+        QueryMsg::GetChannelState { token_id } => {
+            to_json_binary(&query::get_channel_state(deps, token_id)?)
         }
     }
 }
@@ -109,6 +109,7 @@ mod instantiate {
     /// Returns the instantiate2 message and the contract address.
     ///
     /// This is ignored since injective doesn't seem to support instantiate2.
+    #[allow(dead_code)]
     pub fn instantiate2_cw721_ica_extension(
         api: &dyn Api,
         querier: QuerierWrapper,
@@ -171,10 +172,10 @@ mod execute {
         types::{
             keys::CW_ICA_CONTROLLER_INSTANTIATE_REPLY_ID,
             state::{
-                channel::ChannelStatus,
+                channel::{ChannelStatus, ChannelState},
                 get_tx_history_prefix,
                 history::{TransactionRecord, TransactionStatus},
-                QueueItem, CHANNEL_STATUS, NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP, NFT_MINT_QUEUE,
+                QueueItem, CHANNEL_STATE, NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP, NFT_MINT_QUEUE,
                 REGISTERED_ICA_ADDRS, TOKEN_COUNTER,
             },
         },
@@ -229,14 +230,16 @@ mod execute {
         };
 
         match callback {
-            IcaControllerCallbackMsg::OnChannelOpenAckCallback { ica_address, .. } => {
+            IcaControllerCallbackMsg::OnChannelOpenAckCallback { ica_address, channel, .. } => {
                 match NFT_ICA_CONTRACT_BI_MAP.may_load(deps.storage, info.sender.as_str())? {
                     Some(token_id) => {
-                        if CHANNEL_STATUS.load(deps.storage, &token_id)? == ChannelStatus::Open {
+                        let mut channel_state = CHANNEL_STATE.load(deps.storage, &token_id)?;
+                        if channel_state.status == ChannelStatus::Open {
                             return Err(ContractError::ChannelAlreadyOpen);
                         };
 
-                        CHANNEL_STATUS.save(deps.storage, &token_id, &ChannelStatus::Open)?;
+                        channel_state.status = ChannelStatus::Open;
+                        CHANNEL_STATE.save(deps.storage, &token_id, &channel_state)?;
 
                         Ok(Response::default())
                     }
@@ -255,10 +258,13 @@ mod execute {
                         )?;
 
                         NFT_ICA_MAP.save(deps.storage, &queue_item.token_id, &ica_address)?;
-                        CHANNEL_STATUS.save(
+                        CHANNEL_STATE.save(
                             deps.storage,
                             &queue_item.token_id,
-                            &ChannelStatus::Open,
+                            &ChannelState {
+                                status: ChannelStatus::Open,
+                                channel_id: Some(channel.endpoint.channel_id),
+                            },
                         )?;
 
                         let msg = cw721_ica_extension::ExecuteMsg::Mint {
@@ -326,7 +332,14 @@ mod execute {
                     record.status = TransactionStatus::Timeout;
                     records_store.push_front(deps.storage, &record)?;
 
-                    CHANNEL_STATUS.save(deps.storage, &token_id, &ChannelStatus::Closed)?;
+                    CHANNEL_STATE.update(deps.storage, &token_id, |maybe_cs| {
+                        if let Some(mut cs) = maybe_cs {
+                            cs.status = ChannelStatus::Closed;
+                            Ok(cs)
+                        } else {
+                            Err(ContractError::ChannelStateNotFound)
+                        }
+                        })?;
                 }
 
                 Ok(Response::default())
@@ -363,11 +376,11 @@ mod execute {
         // Set channel status to pending if the message is a create channel message.
         if matches!(msg, IcaControllerExecuteMsg::CreateChannel { .. })
             && matches!(
-                CHANNEL_STATUS.load(deps.storage, &token_id)?,
+                CHANNEL_STATE.load(deps.storage, &token_id)?.status,
                 ChannelStatus::Closed
             )
         {
-            CHANNEL_STATUS.save(deps.storage, &token_id, &ChannelStatus::Pending)?;
+            CHANNEL_STATE.save(deps.storage, &token_id, &ChannelState{ status: ChannelStatus::Pending, channel_id: None })?;
         }
 
         if let Some(tx_record) = TransactionRecord::from_ica_msg(
@@ -392,6 +405,7 @@ mod execute {
     /// Returns the instantiate2 message and the contract address.
     ///
     /// This is ignored since injective doesn't seem to support instantiate2.
+    #[allow(dead_code)]
     fn instantiate2_cw_ica_controller(
         api: &dyn Api,
         querier: QuerierWrapper,
@@ -445,8 +459,8 @@ mod query {
             GetIcaAddressesResponse, GetTransactionHistoryResponse, NftIcaPair,
         },
         state::{
-            channel::ChannelStatus, get_tx_history_prefix, history::TransactionRecord, QueueItem,
-            CHANNEL_STATUS, NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP, NFT_MINT_QUEUE,
+            channel::ChannelState, get_tx_history_prefix, history::TransactionRecord, QueueItem,
+            NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP, NFT_MINT_QUEUE, CHANNEL_STATE,
         },
     };
 
@@ -527,8 +541,8 @@ mod query {
         })
     }
 
-    pub fn get_channel_status(deps: Deps, token_id: String) -> StdResult<ChannelStatus> {
-        CHANNEL_STATUS.load(deps.storage, &token_id)
+    pub fn get_channel_state(deps: Deps, token_id: String) -> StdResult<ChannelState> {
+        CHANNEL_STATE.load(deps.storage, &token_id)
     }
 }
 
