@@ -6,8 +6,10 @@ use cosmwasm_std::{Addr, Empty};
 pub use cw721_base::{ContractError, InstantiateMsg, MinterResponse};
 
 // Version info for migration
-const CONTRACT_NAME: &str = "crates.io:cw721-ica-extension";
-const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Name of the contract for cw2
+pub const CONTRACT_NAME: &str = "crates.io:cw721-ica-extension";
+/// Version of the contract for cw2
+pub const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// This is the ICA extension data that is stored with each token
 #[cw_serde]
@@ -101,6 +103,7 @@ mod tests {
     /// Make sure cw2 version info is properly initialized during instantiation,
     /// and NOT overwritten by the base contract.
     #[test]
+    #[cfg(not(feature = "library"))]
     fn proper_cw2_initialization() {
         let mut deps = mock_dependencies();
 
