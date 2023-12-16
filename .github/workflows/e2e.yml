@@ -25,6 +25,7 @@ jobs:
       matrix:
         test:
           - TestMintAndExecute
+          - TestTimeoutAndChannelReopen
     name: ${{ matrix.test }}
     runs-on: ubuntu-latest
     steps:

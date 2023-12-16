@@ -15,6 +15,7 @@ These tests are designed to test the ICA contract itself and its interaction wit
 All contract tests are located in `interchaintest/contract_test.go` file. Currently, there is only one test in this file:
 
 - `TestMintAndExecute`
+- `TestTimeoutAndChannelReopen`
 
 <!-- (These three tests used to be one monolithic test, but they were split into three in order to run them in parallel in the CI.) -->
 
