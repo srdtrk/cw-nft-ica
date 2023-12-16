@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/cosmos/gogoproto/proto"
 	"github.com/stretchr/testify/suite"
@@ -79,6 +80,10 @@ func (s *ContractTestSuite) TestMintAndExecute() {
 		s.Require().NoError(err)
 
 		// Check that the ICA channel was opened:
+		status, err := s.Contract.QueryChannelStatus(ctx, firstTokenID)
+		s.Require().NoError(err)
+		s.Require().Equal("open", status)
+
 		icaContractAddress, err := s.Contract.QueryNftIcaBimap(ctx, firstTokenID)
 		s.Require().NoError(err)
 
@@ -168,6 +173,89 @@ func (s *ContractTestSuite) TestMintAndExecute() {
 		s.Require().Equal(simd.Config().Denom, proposal.TotalDeposit[0].Denom)
 		s.Require().Equal(fmt.Sprint(10000000+5000), proposal.TotalDeposit[0].Amount)
 		// We do not check title and description of the proposal because this is a legacy proposal.
+	})
+}
+
+func (s *ContractTestSuite) TestTimeoutAndChannelReopen() {
+	ctx := context.Background()
+
+	s.SetupContractTestSuite(ctx)
+	wasmd, simd := s.ChainA, s.ChainB
+	wasmdUser := s.UserA
+
+	firstTokenID := "ica-token-0"
+	firstChannelID := "channel-0"
+
+	// var icaContract *types.IcaContract
+	s.Run("MintIca", func() {
+		// Mint a new ICA for the user
+		err := s.Contract.MintIca(ctx, wasmdUser.KeyName(), nil, "--gas", "500000")
+		s.Require().NoError(err)
+
+		// Wait for the channel to get set up
+		err = testutil.WaitForBlocks(ctx, 7, s.ChainA, s.ChainB)
+		s.Require().NoError(err)
+
+	})
+
+	s.Run("TestTimeout", func() {
+		// We will send a message to the host that will timeout after 3 seconds.
+		// You cannot use 0 seconds because block timestamp will be greater than the timeout timestamp which is not allowed.
+		// Host will not be able to respond to this message in time.
+
+		// Stop the relayer so that the host cannot respond to the message:
+		err := s.Relayer.StopRelayer(ctx, s.ExecRep)
+		s.Require().NoError(err)
+
+		time.Sleep(5 * time.Second)
+
+		timeout := uint64(3)
+
+		// Execute the contract:
+		err = s.Contract.ExecuteCustomIcaMsgs(ctx, wasmdUser.KeyName(), firstTokenID, []proto.Message{}, icatypes.EncodingProtobuf, nil, &timeout, "--gas", "500000")
+		s.Require().NoError(err)
+
+		// Wait until timeout:
+		err = testutil.WaitForBlocks(ctx, 5, wasmd, simd)
+		s.Require().NoError(err)
+
+		err = s.Relayer.StartRelayer(ctx, s.ExecRep)
+		s.Require().NoError(err)
+
+		// Wait until timeout acknoledgement is received:
+		err = testutil.WaitForBlocks(ctx, 2, wasmd, simd)
+		s.Require().NoError(err)
+
+		// Flush to make sure the channel is closed in simd:
+		err = s.Relayer.Flush(ctx, s.ExecRep, s.PathName, firstChannelID)
+		s.Require().NoError(err)
+
+		err = testutil.WaitForBlocks(ctx, 2, wasmd, simd)
+		s.Require().NoError(err)
+
+		// Check if the channel is closed:
+		status, err := s.Contract.QueryChannelStatus(ctx, firstTokenID)
+		s.Require().NoError(err)
+		s.Require().Equal("closed", status)
+	})
+
+	s.Run("TestChannelReopen", func() {
+		err := s.Contract.ExecuteIcaMsg(
+			ctx, wasmdUser.KeyName(), firstTokenID, types.IcaControllerExecuteMsg{CreateChannel: &types.NoValue{}}, "--gas", "500000",
+		)
+		s.Require().NoError(err)
+
+		status, err := s.Contract.QueryChannelStatus(ctx, firstTokenID)
+		s.Require().NoError(err)
+		s.Require().Equal("pending", status)
+
+		// Wait until channel is reopened:
+		err = testutil.WaitForBlocks(ctx, 10, wasmd, simd)
+		s.Require().NoError(err)
+
+		status, err = s.Contract.QueryChannelStatus(ctx, firstTokenID)
+		s.Require().NoError(err)
+		s.Require().Equal("open", status)
 	})
 }
 

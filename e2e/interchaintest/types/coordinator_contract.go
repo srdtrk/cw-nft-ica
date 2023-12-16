@@ -88,6 +88,11 @@ func (c *CoordinatorContract) ExecuteCustomIcaMsgs(ctx context.Context, callerKe
 	return c.Execute(ctx, callerKeyName, newCoordinatorIcaCustomMsg(c.chain.Config().EncodingConfig.Codec, tokenID, msgs, encoding, memo, timeout), extraExecTxArgs...)
 }
 
+// ExecuteIcaMsg executes an ICA execute message
+func (c *CoordinatorContract) ExecuteIcaMsg(ctx context.Context, callerKeyName string, tokenID string, icaExecMsg IcaControllerExecuteMsg, extraExecTxArgs ...string) error {
+	return c.Execute(ctx, callerKeyName, newCoordinatorIcaExecuteMsg(tokenID, &icaExecMsg), extraExecTxArgs...)
+}
+
 // QueryContractState queries the contract's state
 func (c *CoordinatorContract) QueryContractState(ctx context.Context) (*CoordinatorContractState, error) {
 	queryResp := QueryResponse[CoordinatorContractState]{}
@@ -120,7 +125,7 @@ func (c *CoordinatorContract) QueryNftIcaBimap(ctx context.Context, key string) 
 	return ica, nil
 }
 
-// QueryNftIcaBimap queries the contract's state
+// QueryNftIcaBimap queries the tokenID <-> controllerAddress bimap
 func (c *CoordinatorContract) QueryIcaAddress(ctx context.Context, tokenID string) (string, error) {
 	queryResp := QueryResponse[string]{}
 	err := c.chain.QueryContract(ctx, c.Address, newGetIcaAddressQueryMsg(tokenID), &queryResp)
@@ -134,4 +139,20 @@ func (c *CoordinatorContract) QueryIcaAddress(ctx context.Context, tokenID strin
 	}
 
 	return ica, nil
+}
+
+// QueryChanelStatus queries the tokenID's channel status
+func (c *CoordinatorContract) QueryChannelStatus(ctx context.Context, tokenID string) (string, error) {
+	queryResp := QueryResponse[string]{}
+	err := c.chain.QueryContract(ctx, c.Address, newGetChannelStatusQueryMsg(tokenID), &queryResp)
+	if err != nil {
+		return "", err
+	}
+
+	status, err := queryResp.GetResp()
+	if err != nil {
+		return "", err
+	}
+
+	return status, nil
 }

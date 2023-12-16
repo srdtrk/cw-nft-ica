@@ -92,6 +92,23 @@ func newCoordinatorIcaCustomMsg(cdc codec.BinaryCodec, tokenID string, msgs []pr
 	return string(jsonBytes)
 }
 
+// newCoordinatorIcaExecuteMsg creates a new ExecuteIcaMsg
+func newCoordinatorIcaExecuteMsg(tokenID string, msg *IcaControllerExecuteMsg) string {
+	execMsg := CoordinatorExecuteMsg{
+		ExecuteIcaMsg: &CoordinatorExecuteIcaMsg{
+			TokenId: tokenID,
+			Msg:     msg,
+		},
+	}
+
+	jsonBytes, err := json.Marshal(execMsg)
+	if err != nil {
+		panic(err)
+	}
+
+	return string(jsonBytes)
+}
+
 type CoordinatorExecuteMsg struct {
 	MintIca       *CoordinatorMintIcaMsg    `json:"mint_ica,omitempty"`
 	ExecuteIcaMsg *CoordinatorExecuteIcaMsg `json:"execute_ica_msg,omitempty"`
@@ -113,8 +130,11 @@ type SendCustomIcaMessagesMsg struct {
 }
 
 type IcaControllerExecuteMsg struct {
-	SendCustomIcaMessagesMsg *SendCustomIcaMessagesMsg `json:"send_custom_ica_messages"`
+	SendCustomIcaMessagesMsg *SendCustomIcaMessagesMsg `json:"send_custom_ica_messages,omitempty"`
+	CreateChannel            *NoValue                  `json:"create_channel,omitempty"`
 }
+
+type NoValue struct{}
 
 func newNftIcaBimapQueryMsg(key string) map[string]interface{} {
 	return map[string]interface{}{
@@ -127,6 +147,14 @@ func newNftIcaBimapQueryMsg(key string) map[string]interface{} {
 func newGetIcaAddressQueryMsg(tokenID string) map[string]interface{} {
 	return map[string]interface{}{
 		"get_ica_address": map[string]interface{}{
+			"token_id": tokenID,
+		},
+	}
+}
+
+func newGetChannelStatusQueryMsg(tokenID string) map[string]interface{} {
+	return map[string]interface{}{
+		"get_channel_status": map[string]interface{}{
 			"token_id": tokenID,
 		},
 	}
