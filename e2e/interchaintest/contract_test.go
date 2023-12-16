@@ -195,7 +195,6 @@ func (s *ContractTestSuite) TestTimeoutAndChannelReopen() {
 		// Wait for the channel to get set up
 		err = testutil.WaitForBlocks(ctx, 7, s.ChainA, s.ChainB)
 		s.Require().NoError(err)
-
 	})
 
 	s.Run("TestTimeout", func() {
