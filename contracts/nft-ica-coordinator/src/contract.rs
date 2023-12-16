@@ -238,7 +238,7 @@ mod execute {
 
                         CHANNEL_STATUS.save(
                             deps.storage,
-                            info.sender.as_str(),
+                            &token_id,
                             &ChannelStatus::Open,
                         )?;
 
