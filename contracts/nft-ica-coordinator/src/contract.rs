@@ -236,11 +236,7 @@ mod execute {
                             return Err(ContractError::ChannelAlreadyOpen);
                         };
 
-                        CHANNEL_STATUS.save(
-                            deps.storage,
-                            &token_id,
-                            &ChannelStatus::Open,
-                        )?;
+                        CHANNEL_STATUS.save(deps.storage, &token_id, &ChannelStatus::Open)?;
 
                         Ok(Response::default())
                     }
