@@ -8,7 +8,7 @@ use cw_ica_controller::types::{
     msg::{options::ChannelOpenInitOptions, ExecuteMsg as IcaControllerExecuteMsg},
 };
 
-use super::state::QueueItem;
+use super::state::channel::ChannelStatus;
 
 /// This is the instantiation message for the contract.
 #[cw_serde]
@@ -81,7 +81,7 @@ pub enum QueryMsg {
         token_ids: Vec<String>,
     },
     /// GetMintQueue returns the mint queue.
-    #[returns(Vec<QueueItem>)]
+    #[returns(Vec<super::state::QueueItem>)]
     GetMintQueue {},
     /// GetTransactionHistory returns the transaction history for the given ICA NFT ID.
     #[returns(query_responses::GetTransactionHistoryResponse)]
@@ -92,6 +92,12 @@ pub enum QueryMsg {
         page: Option<u32>,
         /// The optional page size.
         page_size: Option<u32>,
+    },
+    /// GetChannelState returns the channel state for the given ICA NFT ID.
+    #[returns(ChannelStatus)]
+    GetChannelStatus {
+        /// The token ID of the ICA NFT.
+        token_id: String,
     },
 }
 

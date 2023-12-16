@@ -108,6 +108,11 @@ pub mod storage {
             self.0.load(store, key)
         }
 
+        /// Get the value associated with the given key if the key is present.
+        pub fn may_load(&self, store: &dyn Storage, key: &str) -> StdResult<Option<String>> {
+            self.0.may_load(store, key)
+        }
+
         /// Remove the value associated with the given key and vice versa.
         /// Does not return an error if the key does not exist.
         /// Returns an error if there are issues parsing the value associated with the given key.

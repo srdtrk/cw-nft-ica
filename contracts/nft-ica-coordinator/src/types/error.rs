@@ -20,4 +20,7 @@ pub enum ContractError {
 
     #[error("Queue empty")]
     QueueEmpty,
+
+    #[error("Channel already open")]
+    ChannelAlreadyOpen,
 }

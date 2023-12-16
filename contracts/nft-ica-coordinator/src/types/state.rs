@@ -21,6 +21,8 @@ pub const NFT_ICA_CONTRACT_BI_MAP: NftIcaBiMap = NftIcaBiMap::new("nft_ica_contr
 pub const NFT_MINT_QUEUE: Deque<mint::QueueItem> = Deque::new("nft_mint_queue");
 /// The item used to store the NFT-ICA counter.
 pub const TOKEN_COUNTER: Item<u64> = Item::new("ica_nft_counter");
+/// tha map used to store channel status for each token id
+pub const CHANNEL_STATUS: Map<&str, channel::ChannelStatus> = Map::new("channel_status");
 
 /// The prefix used to store the transaction history.
 const TX_HISTORY_PREFIX: &str = "tx_history_";
@@ -58,6 +60,22 @@ mod mint {
         pub token_id: String,
         /// The owner of the NFT.
         pub owner: String,
+    }
+}
+
+/// This module contains the types used to store the ICA channel state.
+pub mod channel {
+    use cosmwasm_schema::cw_serde;
+
+    /// The status of a channel.
+    #[cw_serde]
+    pub enum ChannelStatus {
+        /// The channel is open.
+        Open,
+        /// The channel is closed.
+        Closed,
+        /// The channel is in the process of closing.
+        Pending,
     }
 }
 

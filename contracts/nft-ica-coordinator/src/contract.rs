@@ -82,6 +82,9 @@ pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
         } => to_json_binary(&query::get_transaction_history(
             deps, token_id, page, page_size,
         )?),
+        QueryMsg::GetChannelStatus { token_id } => {
+            to_json_binary(&query::get_channel_status(deps, token_id)?)
+        }
     }
 }
 
@@ -168,9 +171,10 @@ mod execute {
         types::{
             keys::CW_ICA_CONTROLLER_INSTANTIATE_REPLY_ID,
             state::{
+                channel::ChannelStatus,
                 get_tx_history_prefix,
                 history::{TransactionRecord, TransactionStatus},
-                QueueItem, NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP, NFT_MINT_QUEUE,
+                QueueItem, CHANNEL_STATUS, NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP, NFT_MINT_QUEUE,
                 REGISTERED_ICA_ADDRS, TOKEN_COUNTER,
             },
         },
@@ -226,35 +230,61 @@ mod execute {
 
         match callback {
             IcaControllerCallbackMsg::OnChannelOpenAckCallback { ica_address, .. } => {
-                let queue_item = NFT_MINT_QUEUE
-                    .pop_back(deps.storage)?
-                    .ok_or(ContractError::QueueEmpty)?;
+                match NFT_ICA_CONTRACT_BI_MAP.may_load(deps.storage, info.sender.as_str())? {
+                    Some(token_id) => {
+                        if CHANNEL_STATUS.load(deps.storage, &token_id)? == ChannelStatus::Open {
+                            return Err(ContractError::ChannelAlreadyOpen);
+                        };
 
-                let cw721_ica_extension_address =
-                    STATE.load(deps.storage)?.cw721_ica_extension_address;
+                        CHANNEL_STATUS.save(
+                            deps.storage,
+                            info.sender.as_str(),
+                            &ChannelStatus::Open,
+                        )?;
 
-                NFT_ICA_CONTRACT_BI_MAP.insert(deps.storage, &info.sender, &queue_item.token_id)?;
+                        Ok(Response::default())
+                    }
+                    None => {
+                        let queue_item = NFT_MINT_QUEUE
+                            .pop_back(deps.storage)?
+                            .ok_or(ContractError::QueueEmpty)?;
 
-                NFT_ICA_MAP.save(deps.storage, &queue_item.token_id, &ica_address)?;
+                        let cw721_ica_extension_address =
+                            STATE.load(deps.storage)?.cw721_ica_extension_address;
 
-                let msg = cw721_ica_extension::ExecuteMsg::Mint {
-                    token_id: queue_item.token_id,
-                    owner: queue_item.owner,
-                    token_uri: None,
-                    extension: Extension {
-                        ica_controller_address: info.sender,
-                        ica_address,
-                    },
-                };
+                        NFT_ICA_CONTRACT_BI_MAP.insert(
+                            deps.storage,
+                            info.sender.as_str(),
+                            &queue_item.token_id,
+                        )?;
 
-                let cosmos_msg: CosmosMsg = WasmMsg::Execute {
-                    contract_addr: cw721_ica_extension_address.to_string(),
-                    msg: to_json_binary(&msg)?,
-                    funds: vec![],
+                        NFT_ICA_MAP.save(deps.storage, &queue_item.token_id, &ica_address)?;
+                        CHANNEL_STATUS.save(
+                            deps.storage,
+                            &queue_item.token_id,
+                            &ChannelStatus::Open,
+                        )?;
+
+                        let msg = cw721_ica_extension::ExecuteMsg::Mint {
+                            token_id: queue_item.token_id,
+                            owner: queue_item.owner,
+                            token_uri: None,
+                            extension: Extension {
+                                ica_controller_address: info.sender,
+                                ica_address,
+                            },
+                        };
+
+                        let cosmos_msg: CosmosMsg = WasmMsg::Execute {
+                            contract_addr: cw721_ica_extension_address.to_string(),
+                            msg: to_json_binary(&msg)?,
+                            funds: vec![],
+                        }
+                        .into();
+
+                        Ok(Response::new().add_message(cosmos_msg))
+                    }
                 }
-                .into();
-
-                Ok(Response::new().add_message(cosmos_msg))
             }
             IcaControllerCallbackMsg::OnAcknowledgementPacketCallback {
                 original_packet,
@@ -288,8 +318,10 @@ mod execute {
                     .src
                     .port_id
                     .strip_prefix(keys::WASM_IBC_PORT_PREFIX);
+
                 if let Some(controller_addr) = maybe_controller {
                     let token_id = NFT_ICA_CONTRACT_BI_MAP.load(deps.storage, controller_addr)?;
+
                     let prefix = get_tx_history_prefix(&token_id);
                     let records_store: Deque<TransactionRecord> = Deque::new(&prefix);
                     let mut record = records_store
@@ -297,6 +329,8 @@ mod execute {
                         .ok_or(ContractError::QueueEmpty)?;
                     record.status = TransactionStatus::Timeout;
                     records_store.push_front(deps.storage, &record)?;
+
+                    CHANNEL_STATUS.save(deps.storage, &token_id, &ChannelStatus::Closed)?;
                 }
 
                 Ok(Response::default())
@@ -329,6 +363,16 @@ mod execute {
         if !REGISTERED_ICA_ADDRS.has(deps.storage, &ica_address) {
             return Err(ContractError::Unauthorized);
         };
+
+        // Set channel status to pending if the message is a create channel message.
+        if matches!(msg, IcaControllerExecuteMsg::CreateChannel { .. })
+            && matches!(
+                CHANNEL_STATUS.load(deps.storage, &token_id)?,
+                ChannelStatus::Closed
+            )
+        {
+            CHANNEL_STATUS.save(deps.storage, &token_id, &ChannelStatus::Pending)?;
+        }
 
         if let Some(tx_record) = TransactionRecord::from_ica_msg(
             &msg,
@@ -405,8 +449,8 @@ mod query {
             GetIcaAddressesResponse, GetTransactionHistoryResponse, NftIcaPair,
         },
         state::{
-            get_tx_history_prefix, history::TransactionRecord, QueueItem, NFT_ICA_CONTRACT_BI_MAP,
-            NFT_ICA_MAP, NFT_MINT_QUEUE,
+            channel::ChannelStatus, get_tx_history_prefix, history::TransactionRecord, QueueItem,
+            CHANNEL_STATUS, NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP, NFT_MINT_QUEUE,
         },
     };
 
@@ -485,6 +529,10 @@ mod query {
             records: tx_records?,
             total: records_store.len(deps.storage)?,
         })
+    }
+
+    pub fn get_channel_status(deps: Deps, token_id: String) -> StdResult<ChannelStatus> {
+        CHANNEL_STATUS.load(deps.storage, &token_id)
     }
 }
 
