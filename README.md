@@ -72,7 +72,7 @@ Since this is the contract that actually controls the interchain account, I took
 
 CodeId (Injective Testnet): `4691` (v0.3-alpha)
 
-## How to use
+## How to use (WIP)
 
 The frontend for this project is [here](). You can simply use the intuitive UI to mint NFTs that control interchain accounts on the Cosmos Hub Testnet. However, you must ensure that a relayer is running in the back.
 I'd run the relayer at all times myself, but I don't have the resources to do so (access to stable grpc and rpc nodes for the testnet). So instead, I'll explain how to run the relayer yourself.
