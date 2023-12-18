@@ -14,15 +14,15 @@ This repository wraps the cw721-base contract with an extension that allows stor
 
 CodeId (Injective Testnet): `4457`
 
-Contract Address: `inj12klzylvx2l3h9y6t5wyyvrd6u6jlpy5gj4rwlr` (deployed by nft-ica-coordinator)
+Contract Address: `inj1fvxdz0mac9x87k95xm0rm8jxvewde4kg4rwcng` (deployed by nft-ica-coordinator)
 
 ### NFT ICA Coordinator
 
 This contract associates each NFT in a collection with an interchain account (ICA) using the [cw-ica-controller](https://github.com/srdtrk/cw-ica-controller/) contract.
 
-CodeId (Injective Testnet): `4758` (new query)
+CodeId (Injective Testnet): `4810`
 
-Contract Address: `inj1mmt8mcw8d50m350r3r7jsralfwc3cp8a85yrrc` (deployed by test wallet)
+Contract Address: `inj14763fmusc39llgkgdlg9fll05pzxrnmzd3np5r` (deployed by test wallet)
 
 Instantiate Message:
 
