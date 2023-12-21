@@ -37,7 +37,7 @@ type ContractTestSuite struct {
 func (s *ContractTestSuite) SetupContractTestSuite(ctx context.Context) {
 	s.SetupSuite(ctx, chainSpecs)
 
-	controllerCodeId, err := s.ChainA.StoreContract(ctx, s.UserA.KeyName(), "../../third_party/cw_ica_controller.wasm")
+	controllerCodeId, err := s.ChainA.StoreContract(ctx, s.UserA.KeyName(), "../../ica_controller/cw_ica_controller.wasm")
 	s.Require().NoError(err)
 
 	cw721CodeId, err := s.ChainA.StoreContract(ctx, s.UserA.KeyName(), "../../artifacts/cw721_ica_extension.wasm")
