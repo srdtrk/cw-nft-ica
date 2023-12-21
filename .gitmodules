@@ -1,3 +1,6 @@
 [submodule "nft-ica-ui"]
 	path = nft-ica-ui
 	url = https://github.com/srdtrk/nft-ica-ui
+[submodule "ica_controller/cw-ica-controller"]
+	path = ica_controller/cw-ica-controller
+	url = https://github.com/srdtrk/cw-ica-controller/
