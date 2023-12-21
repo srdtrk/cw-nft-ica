@@ -1,0 +1,3 @@
+[submodule "nft-ica-ui"]
+	path = nft-ica-ui
+	url = https://github.com/srdtrk/nft-ica-ui
