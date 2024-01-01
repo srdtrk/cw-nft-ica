@@ -56,7 +56,7 @@ This contract associates each NFT in a collection with an interchain account (IC
 
 CodeId (Injective Testnet): `4810`
 
-Contract Address: `inj1fvxdz0mac9x87k95xm0rm8jxvewde4kg4rwcng` (deployed by test wallet)
+Contract Address: `inj1r0zaluz99ge2ej756grtjnj4wu9jweak97ve3e` (deployed by test wallet)
 
 Instantiate Message:
 
