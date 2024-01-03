@@ -80,4 +80,36 @@ Instead, the judges can schedule a time period with me to run the relayer and th
 
 ### Running the relayer (WIP)
 
-For this example, we will use the [hermes relayer](https://hermes.informal.systems/).
+For this example, we will use the [hermes relayer v1.7.4](https://hermes.informal.systems/). I've already included the config file and the mnemonic for the test wallet in this repository. You can use the following command to run the relayer after installing hermes from their website.
+If you have cargo installed, you can simply run:
+
+```bash
+cargo install ibc-relayer-cli --version 1.7.4 --bin hermes --locked
+```
+
+You can verify the installation by running:
+
+```bash
+hermes version
+```
+
+Then we copy the config file to the hermes directory:
+
+```bash
+cp hermes/config.toml ~/.hermes/
+```
+
+Then we add the keys to hermes (these wallets are already funded on the testnet):
+
+```bash
+hermes keys add --key-name charlie --chain earth --mnemonic-file hermes/charlie.mnemonic
+hermes keys add --key-name damian --chain mars --mnemonic-file hermes/damian.mnemonic
+```
+
+Then we start the relayer:
+
+```bash
+hermes start
+```
+
+Wait for the relayer to scan both chains until you see `Hermes has started`. This will take a few minutes. Then you may use the frontend.
