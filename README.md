@@ -61,7 +61,7 @@ Contract Address: `inj1r0zaluz99ge2ej756grtjnj4wu9jweak97ve3e` (deployed by test
 Instantiate Message:
 
 ```json
-{"ica_controller_code_id":4691,"cw721_ica_extension_code_id":4457,"default_chan_init_options": {"connection_id": "connection-187","counterparty_connection_id": "connection-3015"}}
+{"ica_controller_code_id":4691,"cw721_ica_extension_code_id":4457,"default_chan_init_options": {"connection_id": "connection-197","counterparty_connection_id": "connection-3123"}}
 ```
 
 ### CosmWasm ICA Controller
