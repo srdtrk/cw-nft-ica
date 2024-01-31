@@ -83,7 +83,7 @@ pub mod channel {
         Open,
         /// The channel is closed.
         Closed,
-        /// The channel is in the process of closing.
+        /// The channel is in the process of opening.
         Pending,
     }
 }
