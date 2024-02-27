@@ -1,13 +1,13 @@
 //! This module handles the execution logic of the contract.
 
 use cosmwasm_std::{entry_point, Addr, Reply, StdError};
-use cosmwasm_std::{to_json_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
+use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
 
 use crate::types::keys::{
     self, CW721_INSTANTIATE_REPLY_ID, CW_ICA_CONTROLLER_INSTANTIATE_REPLY_ID,
 };
 use crate::types::msg::{ExecuteMsg, InstantiateMsg, QueryMsg};
-use crate::types::state::{ContractState, STATE};
+use crate::types::state::{self, ContractState, STATE};
 use crate::types::ContractError;
 
 /// Instantiate the contract.
@@ -18,20 +18,21 @@ pub fn instantiate(
     info: MessageInfo,
     msg: InstantiateMsg,
 ) -> Result<Response, ContractError> {
-    cw2::set_contract_version(deps.storage, keys::CONTRACT_NAME, keys::CONTRACT_VERSION)?;
-
     let owner = msg.owner.unwrap_or(info.sender.to_string());
-    cw_ownable::initialize_owner(deps.storage, deps.api, Some(&owner))?;
+    let owner = deps.api.addr_validate(&owner)?;
+
+    state::OWNER.save(deps.storage, &owner)?;
 
     let instantiate_submsg =
-        instantiate::instantiate_cw721_ica_extension(env, msg.cw721_ica_extension_code_id)?;
+        instantiate::instantiate_snip721(env, msg.snip721_code.code_id, msg.snip721_code.code_hash.clone())?;
 
     let state = ContractState {
         default_chan_init_options: msg.default_chan_init_options,
-        ica_controller_code_id: msg.ica_controller_code_id,
+        ica_controller_code: msg.ica_controller_code,
         // TODO: remove this once injective supports instantiate2 (There is already a branch which supports it).
         // Must be filled in by the reply from the cw721-ica-extension contract.
-        cw721_ica_extension_address: Addr::unchecked("".to_string()),
+        snip721_address: Addr::unchecked("".to_string()),
+        snip721_code_hash: msg.snip721_code.code_hash,
     };
 
     STATE.save(deps.storage, &state)?;
@@ -48,7 +49,7 @@ pub fn execute(
     msg: ExecuteMsg,
 ) -> Result<Response, ContractError> {
     match msg {
-        ExecuteMsg::UpdateOwnership(action) => execute::update_ownership(deps, env, info, action),
+        ExecuteMsg::UpdateOwnership { owner } => execute::update_ownership(deps, info, owner),
         ExecuteMsg::ReceiveIcaCallback(callback) => {
             execute::receive_ica_callback(deps, info, callback)
         }
@@ -63,27 +64,27 @@ pub fn execute(
 #[entry_point]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::Ownership {} => to_json_binary(&cw_ownable::get_ownership(deps.storage)?),
-        QueryMsg::GetContractState {} => to_json_binary(&query::state(deps)?),
+        QueryMsg::Ownership {} => to_binary(&query::owner(deps)?),
+        QueryMsg::GetContractState {} => to_binary(&query::state(deps)?),
         QueryMsg::NftIcaControllerBimap { key } => {
-            to_json_binary(&query::nft_ica_controller_bimap(deps, key)?)
+            to_binary(&query::nft_ica_controller_bimap(deps, key)?)
         }
         QueryMsg::GetIcaAddress { token_id } => {
-            to_json_binary(&query::get_ica_address(deps, token_id)?)
+            to_binary(&query::get_ica_address(deps, token_id)?)
         }
         QueryMsg::GetIcaAddresses { token_ids } => {
-            to_json_binary(&query::get_ica_addresses(deps, token_ids)?)
+            to_binary(&query::get_ica_addresses(deps, token_ids)?)
         }
-        QueryMsg::GetMintQueue {} => to_json_binary(&query::get_mint_queue(deps)?),
+        QueryMsg::GetMintQueue {} => to_binary(&query::get_mint_queue(deps)?),
         QueryMsg::GetTransactionHistory {
             token_id,
             page,
             page_size,
-        } => to_json_binary(&query::get_transaction_history(
+        } => to_binary(&query::get_transaction_history(
             deps, token_id, page, page_size,
         )?),
         QueryMsg::GetChannelState { token_id } => {
-            to_json_binary(&query::get_channel_state(deps, token_id)?)
+            to_binary(&query::get_channel_state(deps, token_id)?)
         }
     }
 }
@@ -99,48 +100,39 @@ pub fn reply(deps: DepsMut, _env: Env, msg: Reply) -> StdResult<Response> {
 }
 
 mod instantiate {
-    use crate::{types::keys::CW721_INSTANTIATE_REPLY_ID, utils};
+    use crate::types::keys::CW721_INSTANTIATE_REPLY_ID;
 
     use super::*;
 
-    use cosmwasm_std::{Addr, Api, CosmosMsg, QuerierWrapper, SubMsg, WasmMsg};
-
-    /// Instantiate the cw721-ica-extension contract using the instantiate2 pattern.
-    /// Returns the instantiate2 message and the contract address.
-    ///
-    /// This is ignored since injective doesn't seem to support instantiate2.
-    #[allow(dead_code)]
-    pub fn instantiate2_cw721_ica_extension(
-        api: &dyn Api,
-        querier: QuerierWrapper,
-        env: Env,
-        code_id: u64,
-        salt: Option<String>,
-    ) -> Result<(CosmosMsg, Addr), ContractError> {
-        let instantiate_msg = to_json_binary(&cw721_base::InstantiateMsg {
-            name: "NFT-ICA".to_string(),
-            symbol: "ICA".to_string(),
-            minter: env.contract.address.to_string(),
-        })?;
-
-        let label = format!("cw721-ica-{}", env.block.height);
-
-        utils::instantiate2_contract(api, querier, env, code_id, salt, label, instantiate_msg)
-    }
+    use cosmwasm_std::{SubMsg, WasmMsg};
 
     /// Instantiate the cw721-ica-extension contract using the submessage pattern.
     /// Returns the instantiate submessage whose reply will contain the new contract address.
-    pub fn instantiate_cw721_ica_extension(
+    pub fn instantiate_snip721(
         env: Env,
         code_id: u64,
+        code_hash: String,
     ) -> Result<SubMsg, ContractError> {
         let instantiate_msg = WasmMsg::Instantiate {
             admin: Some(env.contract.address.to_string()),
             code_id,
-            msg: to_json_binary(&cw721_base::InstantiateMsg {
+            code_hash,
+            msg: to_binary(&snip721_reference_impl::msg::InstantiateMsg {
                 name: "NFT-ICA".to_string(),
                 symbol: "ICA".to_string(),
-                minter: env.contract.address.to_string(),
+                admin: Some(env.contract.address.to_string()),
+                entropy: env.block.time.seconds().to_string(),
+                royalty_info: None,
+                config: Some(snip721_reference_impl::msg::InstantiateConfig{
+                    public_owner: Some(true),
+                    public_token_supply: Some(true),
+                    enable_sealed_metadata: Some(false),
+                    unwrapped_metadata_is_private: Some(false),
+                    minter_may_update_metadata: Some(true),
+                    owner_may_update_metadata: Some(true),
+                    enable_burn: Some(false),
+                }),
+                post_init_callback: None,
             })?,
             label: format!("cw721-ica-{}", env.block.height),
             funds: vec![],
@@ -156,19 +148,20 @@ mod instantiate {
 mod execute {
     use super::*;
 
-    use cosmwasm_std::{Addr, Api, CosmosMsg, QuerierWrapper, SubMsg, WasmMsg};
-    use cw721_ica_extension::{helpers::new_cw721_ica_extension_helper, Extension};
+    use cosmwasm_std::{Addr, CosmosMsg, SubMsg, WasmMsg};
     use cw_ica_controller::{
         helpers::CwIcaControllerContract,
         ibc::types::packet::acknowledgement::Data,
         types::{
             callbacks::IcaControllerCallbackMsg,
-            msg::{options::ChannelOpenInitOptions, ExecuteMsg as IcaControllerExecuteMsg},
+            msg::{options::ChannelOpenInitOptions, CallbackInfo, ExecuteMsg as IcaControllerExecuteMsg},
         },
     };
-    use cw_storage_plus::Deque;
+    use snip721_reference_impl::msg::QueryAnswer;
+    use secret_toolkit::storage::DequeStore as Deque;
+    use secret_toolkit::serialization::Json;
 
-    use crate::{
+    use crate::
         types::{
             keys::CW_ICA_CONTROLLER_INSTANTIATE_REPLY_ID,
             state::{
@@ -178,18 +171,19 @@ mod execute {
                 QueueItem, CHANNEL_STATE, NFT_ICA_CONTRACT_BI_MAP, NFT_ICA_MAP, NFT_MINT_QUEUE,
                 REGISTERED_ICA_ADDRS, TOKEN_COUNTER,
             },
-        },
-        utils,
-    };
+        };
 
     /// Update the ownership of the contract.
     pub fn update_ownership(
         deps: DepsMut,
-        env: Env,
         info: MessageInfo,
-        action: cw_ownable::Action,
+        owner: String,
     ) -> Result<Response, ContractError> {
-        cw_ownable::update_ownership(deps, &env.block, &info.sender, action)?;
+        state::assert_owner(deps.storage, info.sender)?;
+        let owner = deps.api.addr_validate(&owner)?;
+
+        state::OWNER.save(deps.storage, &owner)?;
+
         Ok(Response::default())
     }
 
@@ -213,8 +207,9 @@ mod execute {
 
         let instantiate_submsg = instantiate_cw_ica_controller(
             env,
-            state.ica_controller_code_id,
-            Some(state.default_chan_init_options),
+            state.ica_controller_code.code_id,
+            state.ica_controller_code.code_hash,
+            state.default_chan_init_options,
         )?;
 
         Ok(Response::new().add_submessage(instantiate_submsg))
@@ -225,7 +220,7 @@ mod execute {
         info: MessageInfo,
         callback: IcaControllerCallbackMsg,
     ) -> Result<Response, ContractError> {
-        if !REGISTERED_ICA_ADDRS.has(deps.storage, &info.sender) {
+        if !REGISTERED_ICA_ADDRS.contains(deps.storage, &info.sender) {
             return Err(ContractError::Unauthorized);
         };
 
@@ -236,12 +231,12 @@ mod execute {
                 ..
             } => match NFT_ICA_CONTRACT_BI_MAP.may_load(deps.storage, info.sender.as_str())? {
                 Some(token_id) => {
-                    let channel_state = CHANNEL_STATE.load(deps.storage, &token_id)?;
+                    let channel_state = CHANNEL_STATE.get(deps.storage, &token_id).ok_or(StdError::not_found("channel state"))?;
                     if channel_state.status == ChannelStatus::Open {
                         return Err(ContractError::ChannelAlreadyOpen);
                     };
 
-                    CHANNEL_STATE.save(
+                    CHANNEL_STATE.insert(
                         deps.storage,
                         &token_id,
                         &ChannelState {
@@ -254,11 +249,9 @@ mod execute {
                 }
                 None => {
                     let queue_item = NFT_MINT_QUEUE
-                        .pop_back(deps.storage)?
-                        .ok_or(ContractError::QueueEmpty)?;
+                        .pop_back(deps.storage)?;
 
-                    let cw721_ica_extension_address =
-                        STATE.load(deps.storage)?.cw721_ica_extension_address;
+                    let state = STATE.load(deps.storage)?;
 
                     NFT_ICA_CONTRACT_BI_MAP.insert(
                         deps.storage,
@@ -266,8 +259,8 @@ mod execute {
                         &queue_item.token_id,
                     )?;
 
-                    NFT_ICA_MAP.save(deps.storage, &queue_item.token_id, &ica_address)?;
-                    CHANNEL_STATE.save(
+                    NFT_ICA_MAP.insert(deps.storage, &queue_item.token_id, &ica_address)?;
+                    CHANNEL_STATE.insert(
                         deps.storage,
                         &queue_item.token_id,
                         &ChannelState {
@@ -276,19 +269,22 @@ mod execute {
                         },
                     )?;
 
-                    let msg = cw721_ica_extension::ExecuteMsg::Mint {
-                        token_id: queue_item.token_id,
-                        owner: queue_item.owner,
-                        token_uri: None,
-                        extension: Extension {
-                            ica_controller_address: info.sender,
-                            ica_address,
-                        },
+                    let msg = snip721_reference_impl::msg::ExecuteMsg::MintNft {
+                        token_id: Some(queue_item.token_id),
+                        owner: Some(queue_item.owner),
+                        public_metadata: None,
+                        private_metadata: None,
+                        serial_number: None,
+                        royalty_info: None,
+                        padding: None,
+                        transferable: Some(true),
+                        memo: None,
                     };
 
                     let cosmos_msg: CosmosMsg = WasmMsg::Execute {
-                        contract_addr: cw721_ica_extension_address.to_string(),
-                        msg: to_json_binary(&msg)?,
+                        contract_addr: state.snip721_address.to_string(),
+                        code_hash: state.snip721_code_hash.to_string(),
+                        msg: to_binary(&msg)?,
                         funds: vec![],
                     }
                     .into();
@@ -308,10 +304,9 @@ mod execute {
                 if let Some(controller_addr) = maybe_controller {
                     let token_id = NFT_ICA_CONTRACT_BI_MAP.load(deps.storage, controller_addr)?;
                     let prefix = get_tx_history_prefix(&token_id);
-                    let records_store: Deque<TransactionRecord> = Deque::new(&prefix);
+                    let records_store: Deque<TransactionRecord, Json> = Deque::new(prefix.as_bytes());
                     let mut record = records_store
-                        .pop_front(deps.storage)?
-                        .ok_or(ContractError::QueueEmpty)?;
+                        .pop_front(deps.storage)?;
                     record.status = match ica_acknowledgement {
                         Data::Result(_) => TransactionStatus::Completed,
                         Data::Error(_) => TransactionStatus::Failed,
@@ -333,21 +328,27 @@ mod execute {
                     let token_id = NFT_ICA_CONTRACT_BI_MAP.load(deps.storage, controller_addr)?;
 
                     let prefix = get_tx_history_prefix(&token_id);
-                    let records_store: Deque<TransactionRecord> = Deque::new(&prefix);
+                    let records_store: Deque<TransactionRecord, Json> = Deque::new(prefix.as_bytes());
                     let mut record = records_store
-                        .pop_front(deps.storage)?
-                        .ok_or(ContractError::QueueEmpty)?;
+                        .pop_front(deps.storage)?;
                     record.status = TransactionStatus::Timeout;
                     records_store.push_front(deps.storage, &record)?;
 
-                    CHANNEL_STATE.update(deps.storage, &token_id, |maybe_cs| {
-                        if let Some(mut cs) = maybe_cs {
-                            cs.status = ChannelStatus::Closed;
-                            Ok(cs)
-                        } else {
-                            Err(ContractError::ChannelStateNotFound)
-                        }
-                    })?;
+                    let mut chan_state = CHANNEL_STATE.get(deps.storage, &token_id).ok_or(StdError::not_found("channel state"))?;
+
+                    // Recreate this without update:
+                    //
+                    // CHANNEL_STATE.update(deps.storage, &token_id, |maybe_cs| {
+                    //     if let Some(mut cs) = maybe_cs {
+                    //         cs.status = ChannelStatus::Closed;
+                    //         Ok(cs)
+                    //     } else {
+                    //         Err(ContractError::ChannelStateNotFound)
+                    //     }
+                    // })?;
+
+                    chan_state.status = ChannelStatus::Closed;
+                    CHANNEL_STATE.insert(deps.storage, &token_id, &chan_state)?;
                 }
 
                 Ok(Response::default())
@@ -366,10 +367,17 @@ mod execute {
         let state = STATE.load(deps.storage)?;
 
         // verify that the sender is the owner of the token
-        let cw721_ica_extension = new_cw721_ica_extension_helper(state.cw721_ica_extension_address);
-        let owner = cw721_ica_extension
-            .owner_of(&deps.querier, &token_id, false)?
-            .owner;
+        let snip721_owner_query = snip721_reference_impl::msg::QueryMsg::OwnerOf {
+            token_id: token_id.clone(), viewer: None, include_expired: None,
+        };
+
+        let resp: QueryAnswer = deps.querier.query_wasm_smart(state.snip721_code_hash, state.snip721_address, &snip721_owner_query)?;
+
+        let owner = if let QueryAnswer::OwnerOf { owner, .. } = resp {
+            owner
+        } else {
+            return Err(ContractError::Snip721QueryFailed);
+        };
 
         if owner != info.sender {
             return Err(ContractError::Unauthorized);
@@ -377,18 +385,18 @@ mod execute {
 
         let ica_address = Addr::unchecked(NFT_ICA_CONTRACT_BI_MAP.load(deps.storage, &token_id)?);
         // additional hardening check
-        if !REGISTERED_ICA_ADDRS.has(deps.storage, &ica_address) {
+        if !REGISTERED_ICA_ADDRS.contains(deps.storage, &ica_address) {
             return Err(ContractError::Unauthorized);
         };
 
         // Set channel status to pending if the message is a create channel message.
         if matches!(msg, IcaControllerExecuteMsg::CreateChannel { .. })
             && matches!(
-                CHANNEL_STATE.load(deps.storage, &token_id)?.status,
+                CHANNEL_STATE.get(deps.storage, &token_id).ok_or(StdError::not_found("channel state"))?.status,
                 ChannelStatus::Closed
             )
         {
-            CHANNEL_STATE.save(
+            CHANNEL_STATE.insert(
                 deps.storage,
                 &token_id,
                 &ChannelState {
@@ -406,38 +414,14 @@ mod execute {
             env.block.time.nanos(),
         ) {
             let prefix = get_tx_history_prefix(&token_id);
-            let records_store: Deque<TransactionRecord> = Deque::new(&prefix);
+            let records_store: Deque<TransactionRecord, Json> = Deque::new(prefix.as_bytes());
             records_store.push_front(deps.storage, &tx_record)?;
         }
 
-        let cw_ica_controller = CwIcaControllerContract::new(ica_address);
+        let cw_ica_controller = CwIcaControllerContract::new(ica_address, state.ica_controller_code.code_hash);
         let cosmos_msg = cw_ica_controller.call(msg)?;
 
         Ok(Response::new().add_message(cosmos_msg))
-    }
-
-    /// Instantiate the cw721-ica extension contract using the instantiate2 pattern.
-    /// Returns the instantiate2 message and the contract address.
-    ///
-    /// This is ignored since injective doesn't seem to support instantiate2.
-    #[allow(dead_code)]
-    fn instantiate2_cw_ica_controller(
-        api: &dyn Api,
-        querier: QuerierWrapper,
-        env: Env,
-        code_id: u64,
-        salt: Option<String>,
-        channel_open_init_options: Option<ChannelOpenInitOptions>,
-    ) -> Result<(CosmosMsg, Addr), ContractError> {
-        let instantiate_msg = to_json_binary(&cw_ica_controller::types::msg::InstantiateMsg {
-            owner: Some(env.contract.address.to_string()),
-            channel_open_init_options,
-            send_callbacks_to: Some(env.contract.address.to_string()),
-        })?;
-
-        let label = format!("cw-ica-controller-{}", env.block.height);
-
-        utils::instantiate2_contract(api, querier, env, code_id, salt, label, instantiate_msg)
     }
 
     /// Instantiate the cw721-ica-extension contract using the submessage pattern.
@@ -445,15 +429,22 @@ mod execute {
     pub fn instantiate_cw_ica_controller(
         env: Env,
         code_id: u64,
-        channel_open_init_options: Option<ChannelOpenInitOptions>,
+        code_hash: String,
+        channel_open_init_options: ChannelOpenInitOptions,
     ) -> Result<SubMsg, ContractError> {
         let instantiate_msg = WasmMsg::Instantiate {
             admin: Some(env.contract.address.to_string()),
             code_id,
-            msg: to_json_binary(&cw_ica_controller::types::msg::InstantiateMsg {
+            code_hash,
+            msg: to_binary(&cw_ica_controller::types::msg::InstantiateMsg {
                 owner: Some(env.contract.address.to_string()),
                 channel_open_init_options,
-                send_callbacks_to: Some(env.contract.address.to_string()),
+                send_callbacks_to: Some(
+                    CallbackInfo {
+                        address: env.contract.address.to_string(),
+                        code_hash: env.contract.code_hash,
+                    }
+                ),
             })?,
             label: format!("cw-ica-controller-{}", env.block.height),
             funds: vec![],
@@ -467,6 +458,8 @@ mod execute {
 }
 
 mod query {
+    use self::state::OWNER;
+
     use super::*;
 
     use crate::types::{
@@ -480,21 +473,25 @@ mod query {
     };
 
     use cosmwasm_std::StdResult;
-    use cw_storage_plus::Deque;
+    use secret_toolkit::{serialization::Json, storage::DequeStore as Deque};
 
     /// Query the contract state.
     pub fn state(deps: Deps) -> StdResult<ContractState> {
         STATE.load(deps.storage)
     }
 
+    pub fn owner(deps: Deps) -> StdResult<String> {
+        OWNER.load(deps.storage).map(|addr| addr.to_string())
+    }
+
     /// Query the ICA NFT ID to ICA ID mapping.
     pub fn nft_ica_controller_bimap(deps: Deps, key: String) -> StdResult<String> {
-        NFT_ICA_CONTRACT_BI_MAP.load(deps.storage, &key)
+        NFT_ICA_CONTRACT_BI_MAP.load(deps.storage, key)
     }
 
     /// Query the ICA controller address for a given ICA NFT ID.
     pub fn get_ica_address(deps: Deps, token_id: String) -> StdResult<String> {
-        NFT_ICA_MAP.load(deps.storage, &token_id)
+        NFT_ICA_MAP.get(deps.storage, &token_id).ok_or(StdError::not_found("nft-ica mapping"))
     }
 
     /// Query the ICA controller addresses for a given list of ICA NFT IDs.
@@ -506,7 +503,7 @@ mod query {
             token_ids
                 .iter()
                 .try_fold(Vec::new(), |mut acc, token_id| -> StdResult<_> {
-                    let ica_address = NFT_ICA_MAP.load(deps.storage, token_id)?;
+                    let ica_address = NFT_ICA_MAP.get(deps.storage, token_id).unwrap();
                     acc.push(NftIcaPair {
                         nft_id: token_id.to_string(),
                         ica_address,
@@ -539,7 +536,7 @@ mod query {
         let end = start + page_size as usize;
 
         let prefix = get_tx_history_prefix(&token_id);
-        let records_store: Deque<TransactionRecord> = Deque::new(&prefix);
+        let records_store: Deque<TransactionRecord, Json> = Deque::new(prefix.as_bytes());
 
         let tx_records = records_store
             .iter(deps.storage)?
@@ -552,12 +549,12 @@ mod query {
 
         Ok(GetTransactionHistoryResponse {
             records: tx_records?,
-            total: records_store.len(deps.storage)?,
+            total: records_store.get_len(deps.storage)?,
         })
     }
 
     pub fn get_channel_state(deps: Deps, token_id: String) -> StdResult<ChannelState> {
-        CHANNEL_STATE.load(deps.storage, &token_id)
+        CHANNEL_STATE.get(deps.storage, &token_id).ok_or(StdError::not_found("channel state"))
     }
 }
 
@@ -596,7 +593,7 @@ mod reply {
                 )?;
 
                 STATE.update(deps.storage, |mut cs| -> StdResult<_> {
-                    cs.cw721_ica_extension_address = addr;
+                    cs.snip721_address = addr;
                     Ok(cs)
                 })?;
 

@@ -1,90 +1,18 @@
 //! This module contains utilities for the contract.
 
-use cosmwasm_std::{
-    instantiate2_address, Addr, Api, Binary, CosmosMsg, Env, QuerierWrapper, WasmMsg,
-};
-
-use crate::types::ContractError;
-
-/// Instantiate a contract using the instantiate2 pattern.
-/// Returns the instantiate2 message and the contract address.
-pub fn instantiate2_contract(
-    api: &dyn Api,
-    querier: QuerierWrapper,
-    env: Env,
-    code_id: u64,
-    salt: Option<String>,
-    label: impl Into<String>,
-    instantiate_msg: Binary,
-) -> Result<(CosmosMsg, Addr), ContractError> {
-    let salt = salt.unwrap_or(env.block.time.seconds().to_string());
-
-    let code_info = querier.query_wasm_code_info(code_id)?;
-    let creator_cannonical = api.addr_canonicalize(env.contract.address.as_str())?;
-
-    let contract_addr = api.addr_humanize(&instantiate2_address(
-        &code_info.checksum,
-        &creator_cannonical,
-        salt.as_bytes(),
-    )?)?;
-
-    let instantiate_msg = WasmMsg::Instantiate2 {
-        code_id,
-        msg: instantiate_msg,
-        funds: vec![],
-        label: label.into(),
-        admin: Some(env.contract.address.to_string()),
-        salt: salt.as_bytes().into(),
-    };
-
-    Ok((instantiate_msg.into(), contract_addr))
-}
-
 /// Contains the storage utilities.
 pub mod storage {
-    use cosmwasm_schema::cw_serde;
-    use cosmwasm_std::{StdResult, Storage};
-    use cw_storage_plus::{Map, PrimaryKey};
-
-    /// A set of keys.
-    pub struct KeySet<'a, K>(Map<'a, K, NoValue>);
-
-    #[cw_serde]
-    struct NoValue {}
-
-    impl<'a, K> KeySet<'a, K>
-    where
-        K: PrimaryKey<'a>,
-    {
-        /// Create a new set of keys.
-        pub const fn new(namespace: &'a str) -> Self {
-            Self(Map::new(namespace))
-        }
-
-        /// Insert a new key.
-        pub fn insert(&self, store: &mut dyn Storage, key: K) -> StdResult<()> {
-            self.0.save(store, key, &NoValue {})
-        }
-
-        /// Check if the given key exists.
-        pub fn has(&self, store: &dyn Storage, key: K) -> bool {
-            self.0.has(store, key)
-        }
-
-        /// Remove the given key.
-        /// Does not return an error if the key does not exist.
-        pub fn remove(&self, store: &mut dyn Storage, key: K) {
-            self.0.remove(store, key)
-        }
-    }
+    use cosmwasm_std::{StdError, StdResult, Storage};
+    use secret_toolkit::storage::Keymap;
+    use secret_toolkit::serialization::Bincode2;
 
     /// The bi-directional map between ICA addresses and NFT IDs.
-    pub struct NftIcaBiMap<'a, 'b>(Map<'a, &'b str, String>);
+    pub struct NftIcaBiMap<'a>(Keymap<'a, String, String, Bincode2>);
 
-    impl<'a, 'b> NftIcaBiMap<'a, 'b> {
+    impl<'a> NftIcaBiMap<'a> {
         /// Create a new bi-directional map between ICA addresses and NFT IDs.
-        pub const fn new(namespace: &'a str) -> Self {
-            Self(Map::new(namespace))
+        pub const fn new(namespace: &'a [u8]) -> Self {
+            Self(Keymap::new(namespace))
         }
 
         /// Insert a new ICA address and NFT ID pair.
@@ -97,29 +25,30 @@ pub mod storage {
             let ica_addr = ica_addr.into();
             let nft_id = nft_id.into();
 
-            self.0.save(store, &ica_addr, &nft_id)?;
-            self.0.save(store, &nft_id, &ica_addr)?;
+            self.0.insert(store, &ica_addr, &nft_id)?;
+            self.0.insert(store, &nft_id, &ica_addr)?;
 
             Ok(())
         }
 
         /// Get the value associated with the given key.
-        pub fn load(&self, store: &dyn Storage, key: &str) -> StdResult<String> {
-            self.0.load(store, key)
+        pub fn load(&self, store: &dyn Storage, key: impl Into<String>) -> StdResult<String> {
+            self.0.get(store, &key.into()).ok_or(StdError::not_found("nft_ica_bi_map"))
         }
 
         /// Get the value associated with the given key if the key is present.
-        pub fn may_load(&self, store: &dyn Storage, key: &str) -> StdResult<Option<String>> {
-            self.0.may_load(store, key)
+        pub fn may_load(&self, store: &dyn Storage, key: impl Into<String>) -> StdResult<Option<String>> {
+            Ok(self.0.get(store, &key.into()))
         }
 
         /// Remove the value associated with the given key and vice versa.
         /// Does not return an error if the key does not exist.
         /// Returns an error if there are issues parsing the value associated with the given key.
-        pub fn remove(&self, store: &mut dyn Storage, key: &str) -> StdResult<()> {
-            if let Some(value) = self.0.may_load(store, key)? {
-                self.0.remove(store, key);
-                self.0.remove(store, &value);
+        pub fn remove(&self, store: &mut dyn Storage, key: impl Into<String>) -> StdResult<()> {
+            let key = key.into();
+            if let Some(value) = self.may_load(store, &key)? {
+                self.0.remove(store, &key)?;
+                self.0.remove(store, &value)?;
             }
 
             Ok(())
@@ -136,7 +65,7 @@ pub mod storage {
         fn test_nft_ica_bi_map() {
             let mut storage = MockStorage::new();
 
-            let nft_ica_bi_map = NftIcaBiMap::new("nft_ica_bi_map");
+            let nft_ica_bi_map = NftIcaBiMap::new(b"nft_ica_bi_map");
 
             nft_ica_bi_map
                 .insert(&mut storage, "ica-addr-1", "nft-id-1")

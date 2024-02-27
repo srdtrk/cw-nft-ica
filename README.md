@@ -70,7 +70,7 @@ This contract is not a part of this repository, but it is required for the NFT I
 This contract is instantiated by the NFT ICA Coordinator contract each time a new NFT is minted.
 Since this is the contract that actually controls the interchain account, I took testing and documentation extremely seriously!
 
-CodeId (Injective Testnet): `4691` (v0.3-alpha)
+CodeId (Secret Testnet): `5099` (v0.5)
 
 ## How to use (WIP)
 

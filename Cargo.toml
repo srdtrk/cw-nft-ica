@@ -26,18 +26,13 @@ overflow-checks = true
 
 [workspace.dependencies]
 cosmwasm-schema = "1.5.0"
-cosmwasm-std = { version = "1.5.0", features = [
-    "cosmwasm_1_2",
-    # Enable this if you only deploy to chains that have CosmWasm 1.4 or higher
-    # "cosmwasm_1_4",
+cosmwasm-std = { package = "secret-cosmwasm-std", version = "1.1.11", features = [
+    "stargate",
+    "ibc3",
 ] }
-cw-storage-plus = "1.1.0"
-cw2 = "1.1.1"
+secret-toolkit = "0.10.0"
 schemars = "0.8.15"
 serde = { version = "1.0.189", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.49" }
-cw-ica-controller = { git = "https://github.com/srdtrk/cw-ica-controller.git", rev = "7150af52", default-features = false, features = ["staking"] }
-cw-ownable = "0.5.1"
-cw721 = "0.18.0"
-cw721-base = { version = "0.18.0", features = ["library"] }
-cw721-ica-extension = { version = "0.1.0", path = "./contracts/cw721-ica-extension" }
+cw-ica-controller = { git = "https://github.com/srdtrk/cw-ica-controller/", branch = "secret-cosmwasm", default-features = false, features = ["staking"] }
+snip721-reference-impl = { git = "https://github.com/baedrik/snip721-reference-impl.git", commit = "de9551c2bef4c07c844bbc21c52d367f0da80213" }

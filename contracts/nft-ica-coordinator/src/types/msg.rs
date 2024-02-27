@@ -18,9 +18,9 @@ pub struct InstantiateMsg {
     #[serde(default)]
     pub owner: Option<String>,
     /// The code ID of the ICA controller contract.
-    pub ica_controller_code_id: u64,
+    pub ica_controller_code: CodeInfo,
     /// The code ID of the Cw721 ICA extension contract.
-    pub cw721_ica_extension_code_id: u64,
+    pub snip721_code: CodeInfo,
     /// The default channel open init options for interchain accounts.
     pub default_chan_init_options: ChannelOpenInitOptions,
     /// The optional salt used to generate the cw721 ICA extension
@@ -29,8 +29,16 @@ pub struct InstantiateMsg {
     pub salt: Option<String>,
 }
 
+/// This is the code info for a wasm code in Secret
+#[cw_serde]
+pub struct CodeInfo {
+    /// The code ID of the wasm code.
+    pub code_id: u64,
+    /// The code hash of the wasm code.
+    pub code_hash: String,
+}
+
 /// This is the execution message for the contract.
-#[cw_ownable::cw_ownable_execute]
 #[cw_serde]
 pub enum ExecuteMsg {
     /// MintIca creates a new ICA for the caller.
@@ -52,10 +60,14 @@ pub enum ExecuteMsg {
         /// The custom message to send to the ICA controller contract.
         msg: IcaControllerExecuteMsg,
     },
+    /// `UpdateOwnership` updates the contract owner.
+    UpdateOwnership {
+        /// The new owner of the contract.
+        owner: String,
+    },
 }
 
 /// This is the query message for the contract.
-#[cw_ownable::cw_ownable_query]
 #[cw_serde]
 #[derive(QueryResponses)]
 pub enum QueryMsg {
@@ -99,6 +111,9 @@ pub enum QueryMsg {
         /// The token ID of the ICA NFT.
         token_id: String,
     },
+    /// Ownership returns the owner of the contract.
+    #[returns(String)]
+    Ownership {},
 }
 
 /// This module contains some of the query responses.

@@ -3,26 +3,32 @@
 use cosmwasm_schema::cw_serde;
 
 pub use contract::ContractState;
-use cosmwasm_std::Addr;
-use cw_storage_plus::{Deque, Item, Map};
+use cosmwasm_std::{Addr, Storage};
 pub use mint::QueueItem;
 
-use crate::utils::storage::{KeySet, NftIcaBiMap};
+use crate::utils::storage::NftIcaBiMap;
 
+use secret_toolkit::storage::{Item, Keyset, Keymap, DequeStore};
+use secret_toolkit::serialization::Json;
+
+use super::ContractError;
+
+/// The item used to store the owner of the contract.
+pub const OWNER: Item<Addr> = Item::new(b"owner");
 /// The item used to store the state of the IBC application.
-pub const STATE: Item<ContractState> = Item::new("state");
+pub const STATE: Item<ContractState, Json> = Item::new(b"state");
 /// The map used to map nft token ids to ICA addresses.
-pub const NFT_ICA_MAP: Map<&str, String> = Map::new("nft_ica_map");
+pub static NFT_ICA_MAP: Keymap<String, String> = Keymap::new(b"nft_ica_map");
 /// The keyset used to store the registered ICA addresses to accept callbacks from.
-pub const REGISTERED_ICA_ADDRS: KeySet<&Addr> = KeySet::new("registered_ica");
+pub static REGISTERED_ICA_ADDRS: Keyset<Addr> = Keyset::new(b"registered_ica");
 /// The item used to store the bi-directional map between cw-ica-controller address and NFT IDs.
-pub const NFT_ICA_CONTRACT_BI_MAP: NftIcaBiMap = NftIcaBiMap::new("nft_ica_contract_bi_map");
+pub static NFT_ICA_CONTRACT_BI_MAP: NftIcaBiMap = NftIcaBiMap::new(b"nft_ica_contract_bi_map");
 /// NFT_MINT_QUEUE is the queue of NFT mint requests, waiting for a callback from the ICA controller contract.
-pub const NFT_MINT_QUEUE: Deque<mint::QueueItem> = Deque::new("nft_mint_queue");
+pub static NFT_MINT_QUEUE: DequeStore<mint::QueueItem> = DequeStore::new(b"nft_mint_queue");
 /// The item used to store the NFT-ICA counter.
-pub const TOKEN_COUNTER: Item<u64> = Item::new("ica_nft_counter");
+pub const TOKEN_COUNTER: Item<u64> = Item::new(b"ica_nft_counter");
 /// tha map used to store channel status for each token id
-pub const CHANNEL_STATE: Map<&str, channel::ChannelState> = Map::new("channel_status");
+pub static CHANNEL_STATE: Keymap<String, channel::ChannelState, Json> = Keymap::new(b"channel_status");
 
 /// The prefix used to store the transaction history.
 const TX_HISTORY_PREFIX: &str = "tx_history_";
@@ -32,7 +38,24 @@ pub fn get_tx_history_prefix(token_id: &str) -> String {
     format!("{}{}", TX_HISTORY_PREFIX, token_id)
 }
 
+/// `assert_owner` asserts that the passed address is the owner of the contract.
+///
+/// # Errors
+///
+/// Returns an error if the address is not the owner or if the owner cannot be loaded.
+pub fn assert_owner(
+    storage: &dyn Storage,
+    address: impl Into<String>,
+) -> Result<(), ContractError> {
+    if OWNER.load(storage)? != address.into() {
+        return Err(ContractError::Unauthorized);
+    }
+    Ok(())
+}
+
 mod contract {
+    use crate::types::msg::CodeInfo;
+
     use super::*;
 
     use cosmwasm_std::Addr;
@@ -44,9 +67,11 @@ mod contract {
         /// The default options for new ICA channels.
         pub default_chan_init_options: ChannelOpenInitOptions,
         /// The code ID of the cw-ica-controller contract.
-        pub ica_controller_code_id: u64,
-        /// The address of the cw721-ica-extension contract.
-        pub cw721_ica_extension_address: Addr,
+        pub ica_controller_code: CodeInfo,
+        /// The address of the snip721 contract.
+        pub snip721_address: Addr,
+        /// The code hash of the snip721 contract.
+        pub snip721_code_hash: String,
     }
 }
 
@@ -91,7 +116,7 @@ pub mod channel {
 /// This module contains the types used to store the ICA transaction history.
 pub mod history {
     use super::*;
-    use cosmwasm_std::{CosmosMsg, StakingMsg};
+    use cosmwasm_std::CosmosMsg;
     use cw_ica_controller::types::msg::ExecuteMsg as IcaControllerExecuteMsg;
 
     /// Represents the status of a transaction.
@@ -162,10 +187,6 @@ pub mod history {
                 CosmosMsg::Custom(_) => Self::Custom,
                 CosmosMsg::Stargate { .. } => Self::Stargate,
                 CosmosMsg::Bank(_) => Self::Send,
-                CosmosMsg::Staking(StakingMsg::Delegate { .. }) => Self::Delegate,
-                CosmosMsg::Staking(StakingMsg::Undelegate { .. }) => Self::Undelegate,
-                CosmosMsg::Staking(StakingMsg::Redelegate { .. }) => Self::Redelegate,
-                CosmosMsg::Distribution(_) => Self::Distribution,
                 CosmosMsg::Gov(_) => Self::Vote,
                 CosmosMsg::Wasm(_) => Self::Wasm,
                 CosmosMsg::Ibc(_) => Self::Ibc,

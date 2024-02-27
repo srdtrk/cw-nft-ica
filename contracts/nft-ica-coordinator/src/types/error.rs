@@ -1,5 +1,4 @@
-use cosmwasm_std::{Instantiate2AddressError, StdError};
-use cw_ownable::OwnershipError;
+use cosmwasm_std::StdError;
 use thiserror::Error;
 
 /// ContractError is the error type returned by contract's functions.
@@ -8,12 +7,6 @@ use thiserror::Error;
 pub enum ContractError {
     #[error("{0}")]
     Std(#[from] StdError),
-
-    #[error("{0}")]
-    OwnershipError(#[from] OwnershipError),
-
-    #[error("error when computing the instantiate2 address: {0}")]
-    Instantiate2AddressError(#[from] Instantiate2AddressError),
 
     #[error("Unauthorized")]
     Unauthorized,
@@ -26,4 +19,7 @@ pub enum ContractError {
 
     #[error("Channel state not found")]
     ChannelStateNotFound,
+
+    #[error("Snip721 query failed")]
+    Snip721QueryFailed,
 }
