@@ -42,26 +42,28 @@ I initially made the CosmWasm ICA Controller production ready for this hackathon
 
 ## Contracts
 
-### Cw721 ICA Extension
+### Snip721 Ref Impl
 
 This repository wraps the cw721-base contract with an extension that allows storing the interchain account address for each token.
 
-CodeId (Injective Testnet): `4457`
+CodeId (Secret Testnet): `5140`
+Code Hash: `773c39a4b75d87c4d04b6cfe16d32cd5136271447e231b342f7467177c363ca8`
 
-Contract Address: `inj1zaldrpkszampurlx2ey0ggxshkely5285wwszp` (deployed by nft-ica-coordinator)
+Contract Address: `secret1nt8wfm6fcrahlz3h3x83gxvgmd734xxc9325g6` (deployed by nft-ica-coordinator)
 
 ### NFT ICA Coordinator
 
 This contract associates each NFT in a collection with an interchain account (ICA) using the [cw-ica-controller](https://github.com/srdtrk/cw-ica-controller/) contract.
 
-CodeId (Injective Testnet): `4810`
+CodeId (Secret Testnet): `5141`
+CodeHash: `18033e8600ee524198184d8b8ffaa43dd23582a723b95ff545726af2f178c69a`
 
-Contract Address: `inj1na2fdvcyngukk4nr7e4t8gd3nvdqwxyhs3hppj` (deployed by test wallet)
+Contract Address: `secret1ke9rs87nfu24vcqrdndvv4x9wpkmswc6kjs09s` (deployed by test wallet)
 
 Instantiate Message:
 
 ```json
-{"ica_controller_code_id":4691,"cw721_ica_extension_code_id":4457,"default_chan_init_options": {"connection_id": "connection-217","counterparty_connection_id": "connection-3391"}}
+{"ica_controller_code": {"code_id":5099,"code_hash":"0fcf8bf00419af88fe1b18ec821d68ad0a03655b2eae509a9018f5823454e9f7"},"snip721_code": {"code_id":5140,"code_hash":"773c39a4b75d87c4d04b6cfe16d32cd5136271447e231b342f7467177c363ca8"},"default_chan_init_options": {"connection_id": "connection-74","counterparty_connection_id": "connection-3418"}}
 ```
 
 ### CosmWasm ICA Controller
@@ -71,6 +73,7 @@ This contract is instantiated by the NFT ICA Coordinator contract each time a ne
 Since this is the contract that actually controls the interchain account, I took testing and documentation extremely seriously!
 
 CodeId (Secret Testnet): `5099` (v0.5)
+CodeHash: `0fcf8bf00419af88fe1b18ec821d68ad0a03655b2eae509a9018f5823454e9f7`
 
 ## How to use (WIP)
 
