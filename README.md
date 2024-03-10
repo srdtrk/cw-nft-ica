@@ -49,7 +49,7 @@ This repository wraps the cw721-base contract with an extension that allows stor
 CodeId (Secret Testnet): `5140`
 Code Hash: `773c39a4b75d87c4d04b6cfe16d32cd5136271447e231b342f7467177c363ca8`
 
-Contract Address: `secret1nt8wfm6fcrahlz3h3x83gxvgmd734xxc9325g6` (deployed by nft-ica-coordinator)
+Contract Address: `secret1e62wz6q0ku9yg4q8e5gpwc2mt9tf4vzsdvms97` (deployed by nft-ica-coordinator)
 
 ### NFT ICA Coordinator
 
@@ -58,12 +58,12 @@ This contract associates each NFT in a collection with an interchain account (IC
 CodeId (Secret Testnet): `5141`
 CodeHash: `18033e8600ee524198184d8b8ffaa43dd23582a723b95ff545726af2f178c69a`
 
-Contract Address: `secret1ke9rs87nfu24vcqrdndvv4x9wpkmswc6kjs09s` (deployed by test wallet)
+Contract Address: `secret1m4c74ptw6k3tz5mp7k3jpqkgdcsg3k6ztcll3j` (deployed by test wallet)
 
 Instantiate Message:
 
 ```json
-{"ica_controller_code": {"code_id":5099,"code_hash":"0fcf8bf00419af88fe1b18ec821d68ad0a03655b2eae509a9018f5823454e9f7"},"snip721_code": {"code_id":5140,"code_hash":"773c39a4b75d87c4d04b6cfe16d32cd5136271447e231b342f7467177c363ca8"},"default_chan_init_options": {"connection_id": "connection-74","counterparty_connection_id": "connection-3418"}}
+{"ica_controller_code": {"code_id":5099,"code_hash":"0fcf8bf00419af88fe1b18ec821d68ad0a03655b2eae509a9018f5823454e9f7"},"snip721_code": {"code_id":5140,"code_hash":"773c39a4b75d87c4d04b6cfe16d32cd5136271447e231b342f7467177c363ca8"},"default_chan_init_options": {"connection_id": "connection-75","counterparty_connection_id": "connection-3468"}}
 ```
 
 ### CosmWasm ICA Controller
